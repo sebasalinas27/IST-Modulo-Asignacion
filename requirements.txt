@@ -3,3 +3,5 @@ numpy
 scipy
 openpyxl
 xlsxwriter
+streamlit
+
