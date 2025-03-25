@@ -163,6 +163,24 @@ if uploaded_file is not None:
                 ax2.set_xlabel("Mes")
                 ax2.set_ylabel("Unidades")
                 st.pyplot(fig2)
+                
+                # 3. Evolución de asignación por cliente y mes
+                st.subheader("📈 Evolución de Asignación por Cliente")
+                
+                # Agrupar la asignación por mes y cliente
+                df_asignacion_reset = df_asignacion.reset_index()
+                df_linea = df_asignacion_reset.melt(id_vars=["MES", "Codigo"], var_name="Cliente", value_name="Asignado")
+                df_por_cliente_mes = df_linea.groupby(["MES", "Cliente"])["Asignado"].sum().reset_index()
+                
+                # Crear gráfico de líneas
+                fig3, ax3 = plt.subplots(figsize=(10, 5))
+                sns.lineplot(data=df_por_cliente_mes, x="MES", y="Asignado", hue="Cliente", marker="o", ax=ax3)
+                ax3.set_title("Asignación Total por Cliente en el Tiempo")
+                ax3.set_xlabel("Mes")
+                ax3.set_ylabel("Unidades Asignadas")
+                ax3.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+                st.pyplot(fig3)
+
 
     except Exception as e:
         st.error(f"❌ Error al procesar el archivo: {e}")
