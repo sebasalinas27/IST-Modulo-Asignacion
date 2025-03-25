@@ -4,9 +4,19 @@ import numpy as np
 import io
 
 st.set_page_config(page_title="PIAT - Asignación de Stock", layout="centered")
-st.title("📦 PIAT - Asignación de Stock por Cliente y Mes")
-st.markdown("Sube el archivo Excel con las siguientes hojas: `Stock Disponible`, `Mínimos de Asignación`, `Prioridad Clientes`.")
+st.title("📦 IST - Asignación de Stock por Cliente y Mes")
+st.markdown(
+    """
+    Sube tu archivo Excel con las siguientes hojas:
+    - `Stock Disponible`
+    - `Mínimos de Asignación`
+    - `Prioridad Clientes`
 
+    ---
+    📥 ¿No tienes un archivo?  
+    👉 [Descargar archivo de prueba](https://github.com/sebasalinas27/IST-Modulo-Asignacion/raw/main/Template_Pruebas_PIAT.xlsx)
+    """
+)
 uploaded_file = st.file_uploader("Sube tu archivo Excel", type=["xlsx"])
 
 if uploaded_file is not None:
