@@ -4,4 +4,6 @@ scipy
 openpyxl
 xlsxwriter
 streamlit
+matplotlib
+seaborn
 
