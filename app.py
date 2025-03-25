@@ -1,8 +1,10 @@
-# --- app.py mejorado con enfoque en usuario ---
+# --- app.py final con reportes visuales ---
 import streamlit as st
 import pandas as pd
 import numpy as np
 import io
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 # Configurar la página
 st.set_page_config(page_title="PIAT - Asignación de Stock", layout="centered")
@@ -54,6 +56,9 @@ with st.expander("❗ Tips para evitar errores"):
     - No uses filtros ni fórmulas en el archivo
     - El archivo debe estar en formato `.xlsx` (no `.xls` ni `.csv`)
     """)
+
+# Inicializar asignación vacía por si ocurre error
+df_asignacion = pd.DataFrame()
 
 if uploaded_file is not None:
     try:
@@ -132,6 +137,32 @@ if uploaded_file is not None:
                 st.subheader("🔍 Vista previa: Asignación Óptima")
                 st.dataframe(df_asignacion.head(10))
 
+                # --- Reportes Visuales ---
+                st.subheader("📊 Reportes Visuales")
+
+                # 1. Asignación total por cliente
+                asignacion_total_cliente = df_asignacion.sum(axis=0).sort_values(ascending=False)
+
+                fig1, ax1 = plt.subplots(figsize=(10, 4))
+                sns.barplot(x=asignacion_total_cliente.index, y=asignacion_total_cliente.values, ax=ax1)
+                ax1.set_title("Asignación Total por Cliente")
+                ax1.set_xlabel("Cliente")
+                ax1.set_ylabel("Unidades Asignadas")
+                plt.xticks(rotation=45)
+                st.pyplot(fig1)
+
+                # 2. Stock asignado vs restante por mes
+                df_stock_por_mes = df_stock_filtrado.reset_index().groupby("MES")[["Stock Disponible", "Stock Restante"]].sum()
+                df_stock_por_mes["Stock Asignado"] = df_stock_por_mes["Stock Disponible"] - df_stock_por_mes["Stock Restante"]
+
+                df_melted = df_stock_por_mes[["Stock Asignado", "Stock Restante"]].reset_index().melt(id_vars="MES", var_name="Tipo", value_name="Unidades")
+
+                fig2, ax2 = plt.subplots(figsize=(8, 4))
+                sns.barplot(data=df_melted, x="MES", y="Unidades", hue="Tipo", ax=ax2)
+                ax2.set_title("Stock Asignado vs Stock Restante por Mes")
+                ax2.set_xlabel("Mes")
+                ax2.set_ylabel("Unidades")
+                st.pyplot(fig2)
+
     except Exception as e:
         st.error(f"❌ Error al procesar el archivo: {e}")
-
