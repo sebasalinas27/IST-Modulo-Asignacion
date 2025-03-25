@@ -1,4 +1,4 @@
-# PIAT - Módulo de Asignación
+# IST - Módulo de Asignación
 
 Este proyecto optimiza la asignación de stock por cliente y por mes usando programación lineal.
 
