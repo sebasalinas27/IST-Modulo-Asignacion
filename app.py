@@ -3,8 +3,8 @@ import pandas as pd
 import numpy as np
 import io
 
-st.set_page_config(page_title="PIAT - Asignación de Stock", layout="centered")
-st.title("📦 IST - Asignación de Stock por Cliente y Mes")
+st.set_page_config(page_title="IST - Asignación de Stock", layout="centered")
+st.title("📦 IST - Modulo de asignación de Stock por Cliente y Mes")
 
 st.markdown(
     """
