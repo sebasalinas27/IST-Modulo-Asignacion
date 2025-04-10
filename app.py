@@ -136,6 +136,25 @@ if uploaded_file:
             # --- Reportes Visuales ---
             st.subheader("📊 Reportes Visuales")
 
+            # Resumen por cliente de cumplimiento de mínimos
+            st.subheader("📋 Resumen por Cliente - Cumplimiento de Mínimos")
+            df_asignacion_reset = df_asignacion.reset_index().melt(id_vars=["MES", "Codigo"], var_name="Cliente", value_name="Asignado")
+            asignado_total = df_asignacion_reset.groupby(["MES", "Codigo", "Cliente"])["Asignado"].sum()
+            minimos_check = df_minimos.copy()
+            minimos_check["Asignado"] = asignado_total
+            minimos_check["Asignado"] = minimos_check["Asignado"].fillna(0)
+            minimos_check["Cumple"] = minimos_check["Asignado"] >= minimos_check["Minimo"]
+            minimos_check["Pendiente Final"] = minimos_check["Minimo"] - minimos_check["Asignado"]
+            minimos_pos = minimos_check[minimos_check["Minimo"] > 0].copy()
+            resumen_clientes = minimos_pos.groupby("Cliente").agg(
+                Total_Minimo=("Minimo", "sum"),
+                Total_Asignado=("Asignado", "sum")
+            )
+            resumen_clientes["% Cumplido"] = (resumen_clientes["Total_Asignado"] / resumen_clientes["Total_Minimo"]) * 100
+            resumen_clientes["% Cumplido"] = resumen_clientes["% Cumplido"].round(2)
+            st.dataframe(resumen_clientes)
+
+            # Gráfico de asignación total por cliente
             total_por_cliente = df_asignacion.sum(axis=0).sort_values(ascending=False)
             fig1, ax1 = plt.subplots(figsize=(10, 4))
             sns.barplot(x=total_por_cliente.index, y=total_por_cliente.values, ax=ax1)
@@ -145,19 +164,18 @@ if uploaded_file:
             plt.xticks(rotation=45)
             st.pyplot(fig1)
 
+            # Stock asignado vs restante por mes
             df_stock_mes = df_stock_filtrado.reset_index().groupby("MES")[["Stock Disponible", "Stock Restante"]].sum()
             df_stock_mes["Stock Asignado"] = df_stock_mes["Stock Disponible"] - df_stock_mes["Stock Restante"]
             df_melted = df_stock_mes[["Stock Asignado", "Stock Restante"]].reset_index().melt(id_vars="MES", var_name="Tipo", value_name="Unidades")
-
             fig2, ax2 = plt.subplots(figsize=(8, 4))
             sns.barplot(data=df_melted, x="MES", y="Unidades", hue="Tipo", ax=ax2)
             ax2.set_title("Stock Asignado vs Stock Restante por Mes")
             st.pyplot(fig2)
 
+            # Evolución de asignación
             st.subheader("📈 Evolución de Asignación por Cliente")
-            df_asignacion_reset = df_asignacion.reset_index()
-            df_linea = df_asignacion_reset.melt(id_vars=["MES", "Codigo"], var_name="Cliente", value_name="Asignado")
-            df_cliente_mes = df_linea.groupby(["MES", "Cliente"])["Asignado"].sum().reset_index()
+            df_cliente_mes = df_asignacion_reset.groupby(["MES", "Cliente"])["Asignado"].sum().reset_index()
             fig3, ax3 = plt.subplots(figsize=(10, 5))
             sns.lineplot(data=df_cliente_mes, x="MES", y="Asignado", hue="Cliente", marker="o", ax=ax3)
             ax3.set_title("Asignación Total por Cliente en el Tiempo")
