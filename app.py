@@ -70,6 +70,7 @@ if uploaded_file:
             df_stock_filtrado = df_stock[df_stock['Stock Disponible'] > 0].copy()
             df_stock_filtrado = df_stock_filtrado.set_index(['MES', 'Codigo']).sort_index()
 
+            # ESTA ES LA LÍNEA CORRECTAMENTE UBICADA
             codigos_comunes = set(df_stock_filtrado.index.get_level_values(1)) & set(df_minimos.index.get_level_values(1))
             if len(codigos_comunes) == 0:
                 st.warning("⚠️ No hay códigos en común. Se procesará solo el stock, sin asignaciones.")
