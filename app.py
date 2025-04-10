@@ -19,7 +19,7 @@ st.markdown(
     - `Prioridad Clientes`
 
     ---
-    📅 ¿No tienes un archivo?  
+    📥 ¿No tienes un archivo?  
     👉 [Descargar archivo de prueba](https://github.com/sebasalinas27/IST-Modulo-Asignacion/raw/main/Template_Pruebas_PIAT.xlsx)
     """
 )
@@ -70,7 +70,6 @@ if uploaded_file:
             df_stock_filtrado = df_stock[df_stock['Stock Disponible'] > 0].copy()
             df_stock_filtrado = df_stock_filtrado.set_index(['MES', 'Codigo']).sort_index()
 
-            # ESTA ES LA LÍNEA CORRECTAMENTE UBICADA
             codigos_comunes = set(df_stock_filtrado.index.get_level_values(1)) & set(df_minimos.index.get_level_values(1))
             if len(codigos_comunes) == 0:
                 st.warning("⚠️ No hay códigos en común. Se procesará solo el stock, sin asignaciones.")
@@ -93,7 +92,7 @@ if uploaded_file:
                             df_stock_filtrado.loc[(mes, codigo), 'Stock Disponible'] += valor
                             df_stock_filtrado.loc[(mes, codigo), 'Stock Restante'] += valor
 
-                df_stock_mes = df_stock_filtrado.loc[mes]
+                df_stock_mes = df_stock_filtrado[df_stock_filtrado.index.get_level_values(0) == mes]
 
                 for cliente in clientes_ordenados:
                     pendientes = df_minimos[df_minimos["Pendiente"] > 0]
@@ -101,10 +100,10 @@ if uploaded_file:
 
                     for idx, fila in pendientes_cliente.iterrows():
                         m_origen, codigo, cli = idx
-                        if (mes, codigo) not in df_stock_mes.index:
+                        if (mes, codigo) not in df_stock_filtrado.index:
                             continue
 
-                        stock_disp = df_stock_mes.at[codigo, 'Stock Restante']
+                        stock_disp = df_stock_filtrado.loc[(mes, codigo), 'Stock Restante']
                         pendiente = fila["Pendiente"]
 
                         if pendiente > 0 and stock_disp > 0:
@@ -125,7 +124,7 @@ if uploaded_file:
             # Botón de descarga
             st.success("✅ Optimización completada.")
             st.download_button(
-                label="📅 Descargar archivo Excel",
+                label="📥 Descargar archivo Excel",
                 data=output.getvalue(),
                 file_name="asignacion_resultados_completo.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
