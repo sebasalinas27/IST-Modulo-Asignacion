@@ -1,4 +1,4 @@
-# --- app.py FINAL ESTABLE con manejo robusto de índices ---
+# --- app.py FINAL ESTABLE con resumen de asignaciones no posibles ---
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -71,6 +71,7 @@ if uploaded_file:
                 meses_ordenados = sorted(df_stock_filtrado.index.get_level_values(0).unique())
 
                 df_asignacion = pd.DataFrame(0, index=df_minimos.index.droplevel(2).unique(), columns=clientes_ordenados)
+                no_asignados = []  # lista para registrar combinaciones sin stock declarado
 
                 for mes in meses_ordenados:
                     if mes > 1:
@@ -79,8 +80,6 @@ if uploaded_file:
                             if (mes, codigo) in df_stock_filtrado.index:
                                 df_stock_filtrado.loc[(mes, codigo), 'Stock Disponible'] += valor
                                 df_stock_filtrado.loc[(mes, codigo), 'Stock Restante'] += valor
-
-                    df_stock_mes = df_stock_filtrado[df_stock_filtrado.index.get_level_values(0) == mes]
 
                     for cliente in clientes_ordenados:
                         pendientes_cliente = df_minimos.loc[
@@ -93,13 +92,14 @@ if uploaded_file:
                             m_origen, codigo, cli = idx
 
                             if (mes, codigo) not in df_stock_filtrado.index:
+                                no_asignados.append((mes, codigo, cliente))
                                 continue
 
                             if idx not in df_minimos.index:
-                                st.warning(f"⚠️ idx no encontrado en df_minimos: {idx}")
                                 new_row = pd.DataFrame([[0, 0]], index=pd.MultiIndex.from_tuples([idx], names=["MES", "Codigo", "Cliente"]), columns=["Minimo", "Pendiente"])
-                                df_minimos = pd.concat([df_minimos, new_row])
-                                df_minimos = df_minimos.sort_index()
+                                df_minimos = pd.concat([df_minimos, new_row]).sort_index()
+
+                            df_minimos = df_minimos.sort_index()
 
                             stock_disp = df_stock_filtrado.loc[(mes, codigo), 'Stock Restante']
                             if isinstance(stock_disp, (pd.Series, np.ndarray)):
@@ -150,6 +150,11 @@ if uploaded_file:
 
                 st.subheader("🔍 Vista previa: Asignación Óptima")
                 st.dataframe(df_asignacion.head(10))
+
+                if no_asignados:
+                    st.subheader("📌 Combinaciones sin stock declarado")
+                    df_warn = pd.DataFrame(no_asignados, columns=["MES", "Codigo", "Cliente"])
+                    st.dataframe(df_warn)
 
                 st.subheader("📊 Asignación Total por Cliente")
                 total_por_cliente = df_asignacion.sum().sort_values(ascending=False)
