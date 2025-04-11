@@ -83,7 +83,10 @@ if uploaded_file:
                     df_stock_mes = df_stock_filtrado[df_stock_filtrado.index.get_level_values(0) == mes]
 
                     for cliente in clientes_ordenados:
-                        pendientes_cliente = df_minimos.loc[df_minimos.index.get_level_values(2) == cliente]
+                        pendientes_cliente = df_minimos.loc[
+                            (df_minimos.index.get_level_values(0) <= mes) &
+                            (df_minimos.index.get_level_values(2) == cliente)
+                        ]
                         pendientes_cliente = pendientes_cliente[pendientes_cliente["Pendiente"] > 0]
 
                         for idx, fila in pendientes_cliente.iterrows():
