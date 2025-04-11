@@ -1,4 +1,4 @@
-# --- app.py FINAL ESTABLE con try-except general ---
+# --- app.py FINAL ESTABLE con manejo robusto de índices ---
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -99,6 +99,7 @@ if uploaded_file:
                                 stock_disp = stock_disp.iloc[0] if len(stock_disp) > 0 else 0
 
                             if idx not in df_minimos.index:
+                                st.warning(f"⚠️ idx no encontrado en df_minimos: {idx}")
                                 df_minimos.loc[idx, ["Minimo", "Pendiente"]] = [0, 0]
 
                             pendiente = fila["Pendiente"]
@@ -109,10 +110,7 @@ if uploaded_file:
                                 asignado = min(pendiente, stock_disp)
                                 df_asignacion.at[(mes, codigo), cliente] += asignado
                                 df_stock_filtrado.at[(mes, codigo), 'Stock Restante'] -= asignado
-                                if idx in df_minimos.index:
-                                    df_minimos.loc[idx, "Pendiente"] = df_minimos.loc[idx, "Pendiente"] - asignado
-                            else:
-                                st.warning(f"⚠️ idx no encontrado en df_minimos: {idx}")
+                                df_minimos.loc[idx, "Pendiente"] = df_minimos.loc[idx, "Pendiente"] - asignado
 
                 df_asignacion_reset = df_asignacion.reset_index().melt(id_vars=["MES", "Codigo"], var_name="Cliente", value_name="Asignado")
                 asignado_total = df_asignacion_reset.groupby(["MES", "Codigo", "Cliente"])["Asignado"].sum()
