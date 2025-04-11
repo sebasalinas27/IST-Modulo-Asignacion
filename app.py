@@ -45,7 +45,7 @@ if uploaded_file:
         df_stock = pd.read_excel(uploaded_file, sheet_name="Stock Disponible")
         df_prioridad = pd.read_excel(uploaded_file, sheet_name="Prioridad Clientes", index_col=0)
         df_minimos = pd.read_excel(uploaded_file, sheet_name="Mínimos de Asignación", index_col=[0,1,2])
-        df_minimos = df_minimos.groupby(level=[0, 1, 2], as_index=True).sum()
+        df_minimos = df_minimos.groupby(level=[0, 1, 2], as_index=True).sum().sort_index()
         df_minimos["Pendiente"] = df_minimos["Minimo"]
 
         st.subheader("📊 Resumen del archivo cargado")
@@ -91,17 +91,19 @@ if uploaded_file:
 
                         for idx, fila in pendientes_cliente.iterrows():
                             m_origen, codigo, cli = idx
+
                             if (mes, codigo) not in df_stock_filtrado.index:
                                 continue
+
+                            if idx not in df_minimos.index:
+                                st.warning(f"⚠️ idx no encontrado en df_minimos: {idx}")
+                                new_row = pd.DataFrame([[0, 0]], index=pd.MultiIndex.from_tuples([idx], names=["MES", "Codigo", "Cliente"]), columns=["Minimo", "Pendiente"])
+                                df_minimos = pd.concat([df_minimos, new_row])
+                                df_minimos = df_minimos.sort_index()
 
                             stock_disp = df_stock_filtrado.loc[(mes, codigo), 'Stock Restante']
                             if isinstance(stock_disp, (pd.Series, np.ndarray)):
                                 stock_disp = stock_disp.iloc[0] if len(stock_disp) > 0 else 0
-
-                            if idx not in df_minimos.index:
-                                st.warning(f"⚠️ idx no encontrado en df_minimos: {idx}")
-                                nuevo = pd.DataFrame([[0, 0]], columns=["Minimo", "Pendiente"], index=pd.MultiIndex.from_tuples([idx], names=["MES", "Codigo", "Cliente"]))
-                                df_minimos = pd.concat([df_minimos, nuevo])
 
                             pendiente = fila["Pendiente"]
                             if isinstance(pendiente, (pd.Series, np.ndarray)):
