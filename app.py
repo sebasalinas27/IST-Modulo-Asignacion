@@ -92,16 +92,18 @@ if uploaded_file:
                             if isinstance(stock_disp, (pd.Series, np.ndarray)):
                                 stock_disp = stock_disp.iloc[0] if len(stock_disp) > 0 else 0
 
-                            pendiente = fila["Pendiente"]
-                            if isinstance(pendiente, (pd.Series, np.ndarray)):
-                                pendiente = pendiente.iloc[0] if len(pendiente) > 0 else 0
+                            if idx in df_minimos.index:
+    pendiente = fila["Pendiente"]
+    if isinstance(pendiente, (pd.Series, np.ndarray)):
+        pendiente = pendiente.iloc[0] if len(pendiente) > 0 else 0
 
-                            if pendiente > 0 and stock_disp > 0:
-                                asignado = min(pendiente, stock_disp)
-                                df_asignacion.at[(mes, codigo), cliente] += asignado
-                                df_stock_filtrado.at[(mes, codigo), 'Stock Restante'] -= asignado
-                                if idx in df_minimos.index:
-                                    df_minimos.loc[idx, "Pendiente"] -= asignado
+    if pendiente > 0 and stock_disp > 0:
+        asignado = min(pendiente, stock_disp)
+        df_asignacion.at[(mes, codigo), cliente] += asignado
+        df_stock_filtrado.at[(mes, codigo), 'Stock Restante'] -= asignado
+        df_minimos.loc[idx, "Pendiente"] -= asignado
+else:
+    st.warning(f"⚠️ idx no encontrado en df_minimos: {idx}")
                                 else:
                                     st.warning(f"⚠️ idx no encontrado en df_minimos: {idx}")
 
