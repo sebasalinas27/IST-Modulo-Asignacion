@@ -104,7 +104,6 @@ if uploaded_file:
                                     df_minimos.loc[idx, "Pendiente"] -= asignado
                             else:
                                 st.warning(f"⚠️ idx no encontrado en df_minimos: {idx}")
-                                else:
                                     st.warning(f"⚠️ idx no encontrado en df_minimos: {idx}")
 
                 df_asignacion_reset = df_asignacion.reset_index().melt(id_vars=["MES", "Codigo"], var_name="Cliente", value_name="Asignado")
