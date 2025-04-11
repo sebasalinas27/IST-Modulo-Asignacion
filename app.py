@@ -102,6 +102,8 @@ if uploaded_file:
                                 df_stock_filtrado.at[(mes, codigo), 'Stock Restante'] -= asignado
                                 if idx in df_minimos.index:
                                     df_minimos.loc[idx, "Pendiente"] -= asignado
+                                else:
+                                    st.warning(f"⚠️ idx no encontrado en df_minimos: {idx}")
 
                 df_asignacion_reset = df_asignacion.reset_index().melt(id_vars=["MES", "Codigo"], var_name="Cliente", value_name="Asignado")
                 asignado_total = df_asignacion_reset.groupby(["MES", "Codigo", "Cliente"])["Asignado"].sum()
