@@ -101,8 +101,10 @@ if uploaded_file:
                             if isinstance(stock_disp, (pd.Series, np.ndarray)):
                                 stock_disp = stock_disp.iloc[0] if len(stock_disp) > 0 else 0
 
-                            if idx in df_minimos.index:
-                                pendiente = fila["Pendiente"]
+                            if idx not in df_minimos.index:
+                                        df_minimos.loc[idx, ["Minimo", "Pendiente"]] = [0, 0]
+
+                                    pendiente = fila["Pendiente"]
                                 if isinstance(pendiente, (pd.Series, np.ndarray)):
                                     pendiente = pendiente.iloc[0] if len(pendiente) > 0 else 0
 
