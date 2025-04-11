@@ -117,7 +117,8 @@ if uploaded_file:
             except Exception as err:
                 st.error(f"❌ Error al asignar datos: {err}")
                 raise
-                        minimos_check["Cumple"] = minimos_check["Asignado"] >= minimos_check["Minimo"]
+
+            minimos_check["Cumple"] = minimos_check["Asignado"] >= minimos_check["Minimo"]
             minimos_check["Pendiente Final"] = minimos_check["Minimo"] - minimos_check["Asignado"]
 
             minimos_pos = minimos_check[minimos_check["Minimo"] > 0].copy()
