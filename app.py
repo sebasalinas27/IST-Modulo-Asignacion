@@ -92,14 +92,12 @@ if uploaded_file:
                             m_origen, codigo, cli = idx
 
                             if (mes, codigo) not in df_stock_filtrado.index:
-                                no_asignados.append((mes, codigo, cliente))
                                 continue
 
                             if idx not in df_minimos.index:
                                 new_row = pd.DataFrame([[0, 0]], index=pd.MultiIndex.from_tuples([idx], names=["MES", "Codigo", "Cliente"]), columns=["Minimo", "Pendiente"])
-                                df_minimos = pd.concat([df_minimos, new_row]).sort_index()
-
-                            df_minimos = df_minimos.sort_index()
+                                df_minimos = pd.concat([df_minimos, new_row])
+                                df_minimos = df_minimos.sort_index()
 
                             stock_disp = df_stock_filtrado.loc[(mes, codigo), 'Stock Restante']
                             if isinstance(stock_disp, (pd.Series, np.ndarray)):
@@ -147,14 +145,6 @@ if uploaded_file:
                     file_name="asignacion_resultados_completo.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 )
-
-                st.subheader("🔍 Vista previa: Asignación Óptima")
-                st.dataframe(df_asignacion.head(10))
-
-                if no_asignados:
-                    st.subheader("📌 Combinaciones sin stock declarado")
-                    df_warn = pd.DataFrame(no_asignados, columns=["MES", "Codigo", "Cliente"])
-                    st.dataframe(df_warn)
 
                 st.subheader("📊 Asignación Total por Cliente")
                 total_por_cliente = df_asignacion.sum().sort_values(ascending=False)
