@@ -104,6 +104,7 @@ if uploaded_file:
             df_asignacion_reset = df_asignacion.reset_index().melt(id_vars=["MES", "Codigo"], var_name="Cliente", value_name="Asignado")
             try:
                 asignado_total = df_asignacion_reset.groupby(["MES", "Codigo", "Cliente"])["Asignado"].sum()
+                asignado_total.index.names = ["MES", "Codigo", "Cliente"]
             except Exception as err:
                 st.error(f"❌ Error al agrupar asignación: {err}")
                 raise
