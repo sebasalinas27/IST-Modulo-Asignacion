@@ -63,10 +63,7 @@ if uploaded_file:
                 codigos_comunes = set(df_stock_filtrado.index.get_level_values(1)) & set(df_minimos.index.get_level_values(1))
                 st.info(f"🔄 Se encontraron {len(codigos_comunes)} códigos comunes para asignación.")
 
-                # Aplicar filtro real sobre el stock para trabajar solo con códigos válidos
                 df_stock_filtrado = df_stock_filtrado[df_stock_filtrado.index.get_level_values(1).isin(codigos_comunes)]
-
-                # También filtrar df_minimos para evitar errores de KeyError
                 df_minimos = df_minimos[df_minimos.index.get_level_values(1).isin(codigos_comunes)]
 
                 prioridad_clientes = pd.to_numeric(df_prioridad.iloc[:,0], errors='coerce').fillna(0)
@@ -102,18 +99,18 @@ if uploaded_file:
                                 stock_disp = stock_disp.iloc[0] if len(stock_disp) > 0 else 0
 
                             if idx not in df_minimos.index:
-                                        df_minimos.loc[idx, ["Minimo", "Pendiente"]] = [0, 0]
+                                df_minimos.loc[idx, ["Minimo", "Pendiente"]] = [0, 0]
 
-                                    pendiente = fila["Pendiente"]
-                                if isinstance(pendiente, (pd.Series, np.ndarray)):
-                                    pendiente = pendiente.iloc[0] if len(pendiente) > 0 else 0
+                            pendiente = fila["Pendiente"]
+                            if isinstance(pendiente, (pd.Series, np.ndarray)):
+                                pendiente = pendiente.iloc[0] if len(pendiente) > 0 else 0
 
-                                if pendiente > 0 and stock_disp > 0:
-                                    asignado = min(pendiente, stock_disp)
-                                    df_asignacion.at[(mes, codigo), cliente] += asignado
-                                    df_stock_filtrado.at[(mes, codigo), 'Stock Restante'] -= asignado
-                                    if idx in df_minimos.index:
-                                        df_minimos.loc[idx, "Pendiente"] = df_minimos.loc[idx, "Pendiente"] - asignado
+                            if pendiente > 0 and stock_disp > 0:
+                                asignado = min(pendiente, stock_disp)
+                                df_asignacion.at[(mes, codigo), cliente] += asignado
+                                df_stock_filtrado.at[(mes, codigo), 'Stock Restante'] -= asignado
+                                if idx in df_minimos.index:
+                                    df_minimos.loc[idx, "Pendiente"] = df_minimos.loc[idx, "Pendiente"] - asignado
                             else:
                                 st.warning(f"⚠️ idx no encontrado en df_minimos: {idx}")
 
