@@ -63,6 +63,9 @@ if uploaded_file:
                 codigos_comunes = set(df_stock_filtrado.index.get_level_values(1)) & set(df_minimos.index.get_level_values(1))
                 st.info(f"🔄 Se encontraron {len(codigos_comunes)} códigos comunes para asignación.")
 
+                # Aplicar filtro real sobre el stock para trabajar solo con códigos válidos
+                df_stock_filtrado = df_stock_filtrado[df_stock_filtrado.index.get_level_values(1).isin(codigos_comunes)]
+
                 prioridad_clientes = pd.to_numeric(df_prioridad.iloc[:,0], errors='coerce').fillna(0)
                 clientes_ordenados = prioridad_clientes.sort_values().index.tolist()
                 meses_ordenados = sorted(df_stock_filtrado.index.get_level_values(0).unique())
