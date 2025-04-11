@@ -110,8 +110,7 @@ if uploaded_file:
 
             minimos_check = df_minimos.copy()
             try:
-                asignado_total_filtrado = asignado_total[asignado_total.index.isin(minimos_check.index)]
-                minimos_check["Asignado"] = asignado_total_filtrado
+                minimos_check["Asignado"] = asignado_total.reindex(minimos_check.index, fill_value=0)
             except Exception as err:
                 st.error(f"❌ Error al asignar datos: {err}")
                 raise
