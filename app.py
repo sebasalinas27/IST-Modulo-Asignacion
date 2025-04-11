@@ -102,7 +102,11 @@ if uploaded_file:
 
             # Calcular resumen de cumplimiento
             df_asignacion_reset = df_asignacion.reset_index().melt(id_vars=["MES", "Codigo"], var_name="Cliente", value_name="Asignado")
-            asignado_total = df_asignacion_reset.groupby(["MES", "Codigo", "Cliente"])["Asignado"].sum()
+            try:
+                asignado_total = df_asignacion_reset.groupby(["MES", "Codigo", "Cliente"])["Asignado"].sum()
+            except Exception as err:
+                st.error(f"❌ Error al agrupar asignación: {err}")
+                raise
 
             minimos_check = df_minimos.copy()
             try:
