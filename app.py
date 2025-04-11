@@ -1,4 +1,4 @@
-# --- app.py FINAL SEGURO - con validación de Series y protección de asignaciones ---
+# --- app.py FINAL ESTABLE con todas las mejoras del checklist ---
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -45,12 +45,13 @@ if uploaded_file:
         df_stock = pd.read_excel(uploaded_file, sheet_name="Stock Disponible")
         df_prioridad = pd.read_excel(uploaded_file, sheet_name="Prioridad Clientes", index_col=0)
         df_minimos = pd.read_excel(uploaded_file, sheet_name="Mínimos de Asignación", index_col=[0,1,2])
+        df_minimos["Pendiente"] = df_minimos["Minimo"]
 
         st.subheader("📊 Resumen del archivo cargado")
         st.write(f"- **Productos**: {df_stock['Codigo'].nunique()}")
         st.write(f"- **Clientes**: {df_prioridad.shape[0]}")
         st.write(f"- **Meses**: {df_stock['MES'].nunique()}")
-        st.write(f"- **Celdas con mínimo asignado**: {int((df_minimos['Minimo'] > 0).sum())}")
+        st.write(f"- **Celdas con mínimo asignado**: {(df_minimos['Minimo'] > 0).sum()}")
 
         if st.button("🔁 Ejecutar Asignación"):
             df_stock_filtrado = df_stock[df_stock['Stock Disponible'] > 0].copy()
@@ -58,14 +59,13 @@ if uploaded_file:
             df_stock_filtrado['Stock Restante'] = df_stock_filtrado['Stock Disponible']
 
             codigos_comunes = set(df_stock_filtrado.index.get_level_values(1)) & set(df_minimos.index.get_level_values(1))
-            st.info(f"🔄 Se encontraron {len(codigos_comunes)} códigos comunes.")
+            st.info(f"🔄 Se encontraron {len(codigos_comunes)} códigos comunes para asignación.")
 
             prioridad_clientes = pd.to_numeric(df_prioridad.iloc[:,0], errors='coerce').fillna(0)
             clientes_ordenados = prioridad_clientes.sort_values().index.tolist()
             meses_ordenados = sorted(df_stock_filtrado.index.get_level_values(0).unique())
 
             df_asignacion = pd.DataFrame(0, index=df_minimos.index.droplevel(2).unique(), columns=clientes_ordenados)
-            df_minimos["Pendiente"] = df_minimos["Minimo"]
 
             for mes in meses_ordenados:
                 if mes > 1:
@@ -81,9 +81,6 @@ if uploaded_file:
                     pendientes_cliente = df_minimos.loc[df_minimos.index.get_level_values(2) == cliente]
                     pendientes_cliente = pendientes_cliente[pendientes_cliente["Pendiente"] > 0]
 
-                    if pendientes_cliente.empty:
-                        continue
-
                     for idx, fila in pendientes_cliente.iterrows():
                         m_origen, codigo, cli = idx
                         if (mes, codigo) not in df_stock_filtrado.index:
@@ -92,14 +89,10 @@ if uploaded_file:
                         stock_disp = df_stock_filtrado.loc[(mes, codigo), 'Stock Restante']
                         if isinstance(stock_disp, (pd.Series, np.ndarray)):
                             stock_disp = stock_disp.iloc[0] if len(stock_disp) > 0 else 0
+
                         pendiente = fila["Pendiente"]
                         if isinstance(pendiente, (pd.Series, np.ndarray)):
                             pendiente = pendiente.iloc[0] if len(pendiente) > 0 else 0
-
-                        if isinstance(pendiente, (pd.Series, np.ndarray)):
-                            pendiente = pendiente.item() if len(pendiente) == 1 else 0
-                        if isinstance(stock_disp, (pd.Series, np.ndarray)):
-                            stock_disp = stock_disp.item() if len(stock_disp) == 1 else 0
 
                         if pendiente > 0 and stock_disp > 0:
                             asignado = min(pendiente, stock_disp)
@@ -107,21 +100,24 @@ if uploaded_file:
                             df_stock_filtrado.at[(mes, codigo), 'Stock Restante'] -= asignado
                             df_minimos.loc[idx, "Pendiente"] -= asignado
 
+            # Calcular resumen de cumplimiento
             df_asignacion_reset = df_asignacion.reset_index().melt(id_vars=["MES", "Codigo"], var_name="Cliente", value_name="Asignado")
             asignado_total = df_asignacion_reset.groupby(["MES", "Codigo", "Cliente"])["Asignado"].sum()
+
             minimos_check = df_minimos.copy()
             minimos_check["Asignado"] = asignado_total
             minimos_check["Asignado"] = minimos_check["Asignado"].fillna(0)
             minimos_check["Cumple"] = minimos_check["Asignado"] >= minimos_check["Minimo"]
             minimos_check["Pendiente Final"] = minimos_check["Minimo"] - minimos_check["Asignado"]
-            minimos_pos = minimos_check[minimos_check["Minimo"] > 0].copy()
 
+            minimos_pos = minimos_check[minimos_check["Minimo"] > 0].copy()
             resumen_clientes = minimos_pos.groupby("Cliente").agg(
                 Total_Minimo=("Minimo", "sum"),
                 Total_Asignado=("Asignado", "sum")
             )
             resumen_clientes["% Cumplido"] = (resumen_clientes["Total_Asignado"] / resumen_clientes["Total_Minimo"] * 100).round(2)
 
+            # Guardar archivo final
             output = io.BytesIO()
             with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
                 df_asignacion.to_excel(writer, sheet_name="Asignación Óptima")
@@ -132,7 +128,12 @@ if uploaded_file:
             output.seek(0)
 
             st.success("✅ Optimización completada.")
-            st.download_button("📥 Descargar archivo Excel", data=output.getvalue(), file_name="asignacion_resultados_completo.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+            st.download_button(
+                label="📥 Descargar archivo Excel",
+                data=output.getvalue(),
+                file_name="asignacion_resultados_completo.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
 
             st.subheader("🔍 Vista previa: Asignación Óptima")
             st.dataframe(df_asignacion.head(10))
