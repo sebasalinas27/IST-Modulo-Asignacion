@@ -100,8 +100,8 @@ if uploaded_file:
 
                             if idx not in df_minimos.index:
                                 st.warning(f"⚠️ idx no encontrado en df_minimos: {idx}")
-                                nueva_fila = pd.DataFrame({"Minimo": [0], "Pendiente": [0]}, index=[idx])
-                                df_minimos = pd.concat([df_minimos, nueva_fila])
+                                nuevo = pd.DataFrame([[0, 0]], columns=["Minimo", "Pendiente"], index=pd.MultiIndex.from_tuples([idx], names=["MES", "Codigo", "Cliente"]))
+                                df_minimos = pd.concat([df_minimos, nuevo])
 
                             pendiente = fila["Pendiente"]
                             if isinstance(pendiente, (pd.Series, np.ndarray)):
