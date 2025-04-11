@@ -1,4 +1,4 @@
-# --- app.py FINAL - con asignación arrastrada, hoja de resumen, gráficos y validaciones ---
+# --- app.py FINAL CORREGIDO - sin ambigüedad en Series, hoja de resumen y gráficos ---
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -50,7 +50,7 @@ if uploaded_file:
         st.write(f"- **Productos**: {df_stock['Codigo'].nunique()}")
         st.write(f"- **Clientes**: {df_prioridad.shape[0]}")
         st.write(f"- **Meses**: {df_stock['MES'].nunique()}")
-        st.write(f"- **Celdas con mínimo asignado**: {(df_minimos['Minimo'] > 0).sum()}")
+        st.write(f"- **Celdas con mínimo asignado**: {int((df_minimos['Minimo'] > 0).sum())}")
 
         if st.button("🔁 Ejecutar Asignación"):
             df_stock_filtrado = df_stock[df_stock['Stock Disponible'] > 0].copy()
@@ -58,10 +58,7 @@ if uploaded_file:
             df_stock_filtrado['Stock Restante'] = df_stock_filtrado['Stock Disponible']
 
             codigos_comunes = set(df_stock_filtrado.index.get_level_values(1)) & set(df_minimos.index.get_level_values(1))
-            if len(codigos_comunes) == 0:
-                st.warning("⚠️ No hay códigos en común entre stock y mínimos.")
-            else:
-                st.info(f"🔄 Se encontraron {len(codigos_comunes)} códigos comunes.")
+            st.info(f"🔄 Se encontraron {len(codigos_comunes)} códigos comunes.")
 
             prioridad_clientes = pd.to_numeric(df_prioridad.iloc[:,0], errors='coerce').fillna(0)
             clientes_ordenados = prioridad_clientes.sort_values().index.tolist()
@@ -81,8 +78,8 @@ if uploaded_file:
                 df_stock_mes = df_stock_filtrado[df_stock_filtrado.index.get_level_values(0) == mes]
 
                 for cliente in clientes_ordenados:
-                    pendientes = df_minimos[df_minimos["Pendiente"] > 0]
-                    pendientes_cliente = pendientes[pendientes.index.get_level_values(2) == cliente]
+                    pendientes_cliente = df_minimos.loc[df_minimos.index.get_level_values(2) == cliente]
+                    pendientes_cliente = pendientes_cliente[pendientes_cliente["Pendiente"] > 0]
 
                     for idx, fila in pendientes_cliente.iterrows():
                         m_origen, codigo, cli = idx
@@ -98,7 +95,6 @@ if uploaded_file:
                             df_stock_filtrado.at[(mes, codigo), 'Stock Restante'] -= asignado
                             df_minimos.at[idx, "Pendiente"] -= asignado
 
-            # Calcular resumen de cumplimiento
             df_asignacion_reset = df_asignacion.reset_index().melt(id_vars=["MES", "Codigo"], var_name="Cliente", value_name="Asignado")
             asignado_total = df_asignacion_reset.groupby(["MES", "Codigo", "Cliente"])["Asignado"].sum()
             minimos_check = df_minimos.copy()
@@ -107,13 +103,13 @@ if uploaded_file:
             minimos_check["Cumple"] = minimos_check["Asignado"] >= minimos_check["Minimo"]
             minimos_check["Pendiente Final"] = minimos_check["Minimo"] - minimos_check["Asignado"]
             minimos_pos = minimos_check[minimos_check["Minimo"] > 0].copy()
+
             resumen_clientes = minimos_pos.groupby("Cliente").agg(
                 Total_Minimo=("Minimo", "sum"),
                 Total_Asignado=("Asignado", "sum")
             )
             resumen_clientes["% Cumplido"] = (resumen_clientes["Total_Asignado"] / resumen_clientes["Total_Minimo"] * 100).round(2)
 
-            # Guardar Excel
             output = io.BytesIO()
             with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
                 df_asignacion.to_excel(writer, sheet_name="Asignación Óptima")
@@ -129,7 +125,6 @@ if uploaded_file:
             st.subheader("🔍 Vista previa: Asignación Óptima")
             st.dataframe(df_asignacion.head(10))
 
-            # Gráfico 1: Asignación total por cliente
             st.subheader("📊 Asignación Total por Cliente")
             total_por_cliente = df_asignacion.sum().sort_values(ascending=False)
             fig1, ax1 = plt.subplots(figsize=(10, 4))
@@ -137,7 +132,6 @@ if uploaded_file:
             ax1.set_ylabel("Unidades Asignadas")
             st.pyplot(fig1)
 
-            # Gráfico 2: Stock Asignado vs Restante por mes
             st.subheader("📊 Flujo Mensual de Stock")
             df_stock_mes = df_stock_filtrado.reset_index().groupby("MES")[["Stock Disponible", "Stock Restante"]].sum()
             df_stock_mes["Stock Asignado"] = df_stock_mes["Stock Disponible"] - df_stock_mes["Stock Restante"]
@@ -146,7 +140,6 @@ if uploaded_file:
             sns.barplot(data=df_melted, x="MES", y="Unidades", hue="Tipo", ax=ax2)
             st.pyplot(fig2)
 
-            # Gráfico 3: Evolución de asignación por cliente
             st.subheader("📈 Evolución de Asignación por Cliente")
             df_cliente_mes = df_asignacion_reset.groupby(["MES", "Cliente"])["Asignado"].sum().reset_index()
             fig3, ax3 = plt.subplots(figsize=(10, 5))
