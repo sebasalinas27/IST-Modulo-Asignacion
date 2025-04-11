@@ -45,6 +45,8 @@ if uploaded_file:
         df_stock = pd.read_excel(uploaded_file, sheet_name="Stock Disponible")
         df_prioridad = pd.read_excel(uploaded_file, sheet_name="Prioridad Clientes", index_col=0)
         df_minimos = pd.read_excel(uploaded_file, sheet_name="Mínimos de Asignación", index_col=[0,1,2])
+        # Consolidar mínimos repetidos por MES, Codigo y Cliente
+        df_minimos = df_minimos.groupby(level=[0, 1, 2], as_index=True).sum()
         df_minimos["Pendiente"] = df_minimos["Minimo"]
 
         st.subheader("📊 Resumen del archivo cargado")
@@ -111,12 +113,11 @@ if uploaded_file:
 
             minimos_check = df_minimos.copy()
             try:
-                minimos_check["Asignado"] = asignado_total.reindex(minimos_check.index, fill_value=0)
+                minimos_check["Asignado"] = asignado_total.reindex(minimos_check.index, fill_value=0).astype(float)
             except Exception as err:
                 st.error(f"❌ Error al asignar datos: {err}")
                 raise
-            minimos_check["Asignado"] = minimos_check["Asignado"].fillna(0)
-            minimos_check["Cumple"] = minimos_check["Asignado"] >= minimos_check["Minimo"]
+                        minimos_check["Cumple"] = minimos_check["Asignado"] >= minimos_check["Minimo"]
             minimos_check["Pendiente Final"] = minimos_check["Minimo"] - minimos_check["Asignado"]
 
             minimos_pos = minimos_check[minimos_check["Minimo"] > 0].copy()
@@ -170,5 +171,4 @@ if uploaded_file:
             st.pyplot(fig3)
 
     except Exception as e:
-        st.write(f"📎 Tipo de error capturado: {type(e)}")
-        st.error(f"❌ Error al procesar el archivo: {str(e)}")
+                st.error(f"❌ Error al procesar el archivo: {str(e)}")
