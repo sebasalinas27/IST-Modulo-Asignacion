@@ -112,6 +112,22 @@ if uploaded_file:
                             df_stock_filtrado.at[(mes, codigo), 'Stock Restante'] -= asignado
                             df_minimos.at[idx, "Pendiente"] -= asignado
 
+            # Calcular resumen_clientes antes de guardar Excel
+            df_asignacion_reset = df_asignacion.reset_index().melt(id_vars=["MES", "Codigo"], var_name="Cliente", value_name="Asignado")
+            asignado_total = df_asignacion_reset.groupby(["MES", "Codigo", "Cliente"])["Asignado"].sum()
+            minimos_check = df_minimos.copy()
+            minimos_check["Asignado"] = asignado_total
+            minimos_check["Asignado"] = minimos_check["Asignado"].fillna(0)
+            minimos_check["Cumple"] = minimos_check["Asignado"] >= minimos_check["Minimo"]
+            minimos_check["Pendiente Final"] = minimos_check["Minimo"] - minimos_check["Asignado"]
+            minimos_pos = minimos_check[minimos_check["Minimo"] > 0].copy()
+            resumen_clientes = minimos_pos.groupby("Cliente").agg(
+                Total_Minimo=("Minimo", "sum"),
+                Total_Asignado=("Asignado", "sum")
+            )
+            resumen_clientes["% Cumplido"] = (resumen_clientes["Total_Asignado"] / resumen_clientes["Total_Minimo"]) * 100
+            resumen_clientes["% Cumplido"] = resumen_clientes["% Cumplido"].round(2)
+
             # Guardar Excel virtual
             output = io.BytesIO()
             with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
