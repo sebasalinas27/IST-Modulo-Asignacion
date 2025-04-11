@@ -119,6 +119,7 @@ if uploaded_file:
                 df_stock_filtrado.to_excel(writer, sheet_name="Stock Disponible")
                 df_prioridad.to_excel(writer, sheet_name="Prioridad Clientes")
                 df_minimos.to_excel(writer, sheet_name="Mínimos de Asignación")
+                resumen_clientes.to_excel(writer, sheet_name="Resumen Clientes")
             output.seek(0)
 
             # Botón de descarga
