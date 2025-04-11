@@ -169,4 +169,5 @@ if uploaded_file:
             st.pyplot(fig3)
 
     except Exception as e:
+        st.write(f"📎 Tipo de error capturado: {type(e)}")
         st.error(f"❌ Error al procesar el archivo: {str(e)}")
