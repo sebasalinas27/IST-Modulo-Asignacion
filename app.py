@@ -105,7 +105,11 @@ if uploaded_file:
             asignado_total = df_asignacion_reset.groupby(["MES", "Codigo", "Cliente"])["Asignado"].sum()
 
             minimos_check = df_minimos.copy()
-            minimos_check["Asignado"] = asignado_total
+            try:
+                minimos_check["Asignado"] = asignado_total
+            except Exception as err:
+                st.error(f"❌ Error al asignar datos: {err}")
+                raise
             minimos_check["Asignado"] = minimos_check["Asignado"].fillna(0)
             minimos_check["Cumple"] = minimos_check["Asignado"] >= minimos_check["Minimo"]
             minimos_check["Pendiente Final"] = minimos_check["Minimo"] - minimos_check["Asignado"]
