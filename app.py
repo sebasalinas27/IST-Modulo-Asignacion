@@ -90,7 +90,11 @@ if uploaded_file:
                             continue
 
                         stock_disp = df_stock_filtrado.loc[(mes, codigo), 'Stock Restante']
+                        if isinstance(stock_disp, (pd.Series, np.ndarray)):
+                            stock_disp = stock_disp.iloc[0] if len(stock_disp) > 0 else 0
                         pendiente = fila["Pendiente"]
+                        if isinstance(pendiente, (pd.Series, np.ndarray)):
+                            pendiente = pendiente.iloc[0] if len(pendiente) > 0 else 0
 
                         if isinstance(pendiente, (pd.Series, np.ndarray)):
                             pendiente = pendiente.item() if len(pendiente) == 1 else 0
