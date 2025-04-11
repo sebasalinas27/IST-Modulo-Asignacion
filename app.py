@@ -1,4 +1,4 @@
-# --- app.py FINAL CORREGIDO - sin ambigüedad en Series, hoja de resumen y gráficos ---
+# --- app.py FINAL SEGURO - con validación de Series y protección de asignaciones ---
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -81,6 +81,9 @@ if uploaded_file:
                     pendientes_cliente = df_minimos.loc[df_minimos.index.get_level_values(2) == cliente]
                     pendientes_cliente = pendientes_cliente[pendientes_cliente["Pendiente"] > 0]
 
+                    if pendientes_cliente.empty:
+                        continue
+
                     for idx, fila in pendientes_cliente.iterrows():
                         m_origen, codigo, cli = idx
                         if (mes, codigo) not in df_stock_filtrado.index:
@@ -88,6 +91,11 @@ if uploaded_file:
 
                         stock_disp = df_stock_filtrado.loc[(mes, codigo), 'Stock Restante']
                         pendiente = fila["Pendiente"]
+
+                        if isinstance(pendiente, (pd.Series, np.ndarray)):
+                            pendiente = pendiente.item() if len(pendiente) == 1 else 0
+                        if isinstance(stock_disp, (pd.Series, np.ndarray)):
+                            stock_disp = stock_disp.item() if len(stock_disp) == 1 else 0
 
                         if pendiente > 0 and stock_disp > 0:
                             asignado = min(pendiente, stock_disp)
@@ -148,4 +156,4 @@ if uploaded_file:
             st.pyplot(fig3)
 
     except Exception as e:
-        st.error(f"❌ Error al procesar el archivo: {e}")
+        st.error(f"❌ Error al procesar el archivo: {str(e)}")
