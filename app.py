@@ -111,7 +111,7 @@ if uploaded_file:
                                     df_asignacion.at[(mes, codigo), cliente] += asignado
                                     df_stock_filtrado.at[(mes, codigo), 'Stock Restante'] -= asignado
                                     if idx in df_minimos.index:
-                                    df_minimos.loc[idx, "Pendiente"] = df_minimos.loc[idx, "Pendiente"] - asignado
+                                        df_minimos.loc[idx, "Pendiente"] = df_minimos.loc[idx, "Pendiente"] - asignado
                             else:
                                 st.warning(f"⚠️ idx no encontrado en df_minimos: {idx}")
 
