@@ -98,13 +98,10 @@ if uploaded_file:
                             if isinstance(stock_disp, (pd.Series, np.ndarray)):
                                 stock_disp = stock_disp.iloc[0] if len(stock_disp) > 0 else 0
 
-                            idx_actual = (mes, codigo, cliente)
-                            if idx_actual not in df_minimos.index:
-                                st.warning(f"⚠️ idx no encontrado en df_minimos: {idx_actual}")
-                                df_minimos = df_minimos.append(
-                                    pd.DataFrame({"Minimo": [0], "Pendiente": [0]},
-                                                 index=pd.MultiIndex.from_tuples([idx_actual], names=df_minimos.index.names))
-                                )
+                            if idx not in df_minimos.index:
+                                st.warning(f"⚠️ idx no encontrado en df_minimos: {idx}")
+                                nueva_fila = pd.DataFrame({"Minimo": [0], "Pendiente": [0]}, index=[idx])
+                                df_minimos = pd.concat([df_minimos, nueva_fila])
 
                             pendiente = fila["Pendiente"]
                             if isinstance(pendiente, (pd.Series, np.ndarray)):
