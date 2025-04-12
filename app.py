@@ -24,7 +24,6 @@ uploaded_file = st.file_uploader("Sube tu archivo Excel", type=["xlsx"])
 with st.expander("ℹ️ ¿Cómo interpretar el archivo descargado?"):
     st.markdown("""
     El archivo contiene:
-
     📄 Asignación Óptima → unidades por código, mes y cliente.
     📄 Stock Disponible → stock inicial, restante y arrastrado.
     📄 Resumen Clientes → % de cumplimiento por cliente.
@@ -36,7 +35,6 @@ with st.expander("❗ Tips para evitar errores"):
     - Elimina filtros, fórmulas y filas vacías
     - Solo formato `.xlsx`
     """)
-
 df_asignacion = pd.DataFrame()
 
 if uploaded_file:
@@ -44,6 +42,7 @@ if uploaded_file:
         df_stock = pd.read_excel(uploaded_file, sheet_name="Stock Disponible")
         df_prioridad = pd.read_excel(uploaded_file, sheet_name="Prioridad Clientes", index_col=0)
         df_minimos = pd.read_excel(uploaded_file, sheet_name="Mínimos de Asignación", index_col=[0,1,2])
+
         df_minimos = df_minimos.groupby(level=[0, 1, 2], as_index=True).sum().sort_index()
         df_minimos["Pendiente"] = df_minimos["Minimo"]
 
@@ -52,7 +51,6 @@ if uploaded_file:
         st.write(f"- **Clientes**: {df_prioridad.shape[0]}")
         st.write(f"- **Meses**: {df_stock['MES'].nunique()}")
         st.write(f"- **Celdas con mínimo asignado**: {(df_minimos['Minimo'] > 0).sum()}")
-
         if st.button("🔁 Ejecutar Asignación"):
             try:
                 df_stock_filtrado = df_stock[df_stock['Stock Disponible'] > 0].copy()
@@ -65,50 +63,40 @@ if uploaded_file:
 
                 prioridad_clientes = pd.to_numeric(df_prioridad.iloc[:,0], errors='coerce').fillna(0)
                 clientes_ordenados = prioridad_clientes.sort_values().index.tolist()
-                meses_ordenados = sorted(df_stock_filtrado.index.get_level_values(0).unique())
 
                 df_asignacion = pd.DataFrame(0, index=df_minimos.index.droplevel(2).unique(), columns=clientes_ordenados)
 
-                for mes in meses_ordenados:
-                    if mes > 1:
-                        stock_ant = df_stock_filtrado.loc[(mes-1, slice(None)), 'Stock Restante'].groupby(level=1).sum()
-                        for codigo, valor in stock_ant.items():
-                            if (mes, codigo) in df_stock_filtrado.index:
-                                df_stock_filtrado.loc[(mes, codigo), 'Stock Disponible'] += valor
-                                df_stock_filtrado.loc[(mes, codigo), 'Stock Restante'] += valor
+                # NUEVA LÓGICA DE ASIGNACIÓN DIRECTA CONSOLIDADA
+                combinaciones = df_minimos.reset_index()[["Codigo", "Cliente"]].drop_duplicates()
 
-                    for cliente in clientes_ordenados:
-                        pendientes_cliente = df_minimos.loc[
-                            (df_minimos.index.get_level_values(0) <= mes) &
-                            (df_minimos.index.get_level_values(2) == cliente)
-                        ]
-                        pendientes_cliente = pendientes_cliente[pendientes_cliente["Pendiente"] > 0]
+                for _, row in combinaciones.iterrows():
+                    codigo = row["Codigo"]
+                    cliente = row["Cliente"]
 
-                        for idx, fila in pendientes_cliente.iterrows():
-                            m_origen, codigo, cli = idx
-                            idx_actual = (mes, codigo, cliente)
+                    minimos_cliente = df_minimos.xs(key=(codigo, cliente), level=(1,2), drop_level=False).sort_index()
+                    total_pendiente = minimos_cliente["Pendiente"].sum()
 
-                            if (mes, codigo) not in df_stock_filtrado.index:
-                                continue
+                    stock_disponible = df_stock_filtrado[df_stock_filtrado.index.get_level_values(1) == codigo].copy()
 
-                            if idx_actual not in df_minimos.index:
-                                df_minimos.loc[idx_actual] = [0, 0]
-                                df_minimos.sort_index(inplace=True)
+                    for mes in stock_disponible.index.get_level_values(0).unique():
+                        stock_valor = df_stock_filtrado.loc[(mes, codigo), "Stock Restante"]
 
-                            stock_disp = df_stock_filtrado.loc[(mes, codigo), 'Stock Restante']
-                            if isinstance(stock_disp, (pd.Series, np.ndarray)):
-                                stock_disp = stock_disp.iloc[0] if len(stock_disp) > 0 else 0
+                        if total_pendiente == 0:
+                            break
 
-                            pendiente = fila["Pendiente"]
-                            if isinstance(pendiente, (pd.Series, np.ndarray)):
-                                pendiente = pendiente.iloc[0] if len(pendiente) > 0 else 0
+                        asignar = min(stock_valor, total_pendiente)
 
-                            if pendiente > 0 and stock_disp > 0:
-                                asignado = min(pendiente, stock_disp)
-                                df_asignacion.at[(mes, codigo), cliente] += asignado
-                                df_stock_filtrado.at[(mes, codigo), 'Stock Restante'] -= asignado
-                                df_minimos.loc[idx, "Pendiente"] -= asignado
-                                df_asignacion_reset = df_asignacion.reset_index().melt(id_vars=["MES", "Codigo"], var_name="Cliente", value_name="Asignado")
+                        if asignar > 0:
+                            df_asignacion.at[(mes, codigo), cliente] += asignar
+                            df_stock_filtrado.loc[(mes, codigo), "Stock Restante"] -= asignar
+                            total_pendiente -= asignar
+
+                    # Actualizar Pendiente por fila
+                    for idx in minimos_cliente.index:
+                        minimo = df_minimos.loc[idx, "Minimo"]
+                        asignado = df_asignacion.loc[(slice(None), idx[1]), cliente].sum()
+                        df_minimos.loc[idx, "Pendiente"] = max(minimo - asignado, 0)
+                df_asignacion_reset = df_asignacion.reset_index().melt(id_vars=["MES", "Codigo"], var_name="Cliente", value_name="Asignado")
                 asignado_total = df_asignacion_reset.groupby(["MES", "Codigo", "Cliente"])["Asignado"].sum()
                 asignado_total.index.names = ["MES", "Codigo", "Cliente"]
 
