@@ -36,7 +36,7 @@ with st.expander("❗ Tips para evitar errores"):
     - Solo formato `.xlsx`
     """)
 # Consolidar mínimos trasladados para evitar duplicaciones
-df_minimos_reset = df_minimos.reset_index()
+df_minimos_reset = df_minimos_raw.reset_index()
 df_minimos_reset["MES"] = df_minimos_reset["MES"].astype(int)
 
 # Detectar duplicados por (Código, Cliente, MES)
