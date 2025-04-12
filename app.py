@@ -20,6 +20,35 @@ Sube tu archivo Excel con las siguientes hojas:
 """)
 
 uploaded_file = st.file_uploader("Sube tu archivo Excel", type=["xlsx"])
+if uploaded_file:
+    df_stock = pd.read_excel(uploaded_file, sheet_name="Stock Disponible")
+    df_prioridad = pd.read_excel(uploaded_file, sheet_name="Prioridad Clientes", index_col=0)
+    df_minimos_raw = pd.read_excel(uploaded_file, sheet_name="Mínimos de Asignación")
+
+    # Validar y preparar df_minimos
+    df_minimos_raw = df_minimos_raw.dropna(subset=["MES", "Codigo", "Cliente"])
+    df_minimos_raw["MES"] = df_minimos_raw["MES"].astype(int)
+
+    # Agrupar mínimos y crear columna Pendiente
+    df_minimos = df_minimos_raw.groupby(["MES", "Codigo", "Cliente"], as_index=True)["Minimo"].sum().to_frame()
+    df_minimos["Pendiente"] = df_minimos["Minimo"]
+
+    # Reiniciar índice para consolidación de duplicados (si arrastró mínimo varias veces)
+    df_minimos_reset = df_minimos.reset_index()
+
+    # Verificar duplicados (MES, Código, Cliente)
+    duplicados = df_minimos_reset.duplicated(subset=["MES", "Codigo", "Cliente"], keep=False)
+
+    if duplicados.any():
+        # Consolidar duplicados sumando mínimo y pendiente
+        df_minimos_reset = df_minimos_reset.groupby(["MES", "Codigo", "Cliente"], as_index=False).agg({
+            "Minimo": "sum",
+            "Pendiente": "sum"
+        })
+
+    # Volver a MultiIndex ordenado
+    df_minimos = df_minimos_reset.set_index(["MES", "Codigo", "Cliente"]).sort_index()
+
 with st.expander("ℹ️ ¿Cómo interpretar el archivo descargado?"):
     st.markdown("""
     El archivo contiene:
@@ -35,32 +64,6 @@ with st.expander("❗ Tips para evitar errores"):
     - Elimina filtros, fórmulas y filas vacías  
     - Solo formato `.xlsx`
     """)
-# Consolidar mínimos trasladados para evitar duplicaciones
-df_minimos_reset = df_minimos_raw.reset_index()
-df_minimos_reset["MES"] = df_minimos_reset["MES"].astype(int)
-
-# Detectar duplicados por (Código, Cliente, MES)
-duplicados = df_minimos_reset.duplicated(subset=["MES", "Codigo", "Cliente"], keep=False)
-
-if duplicados.any():
-    # Consolidar sumando mínimos y pendientes
-    df_minimos_reset = df_minimos_reset.groupby(["MES", "Codigo", "Cliente"], as_index=False).agg({
-        "Minimo": "sum",
-        "Pendiente": "sum"
-    })
-
-# 3.1 - Restaurar MultiIndex y preparar df_minimos
-df_stock = pd.read_excel(uploaded_file, sheet_name="Stock Disponible")
-df_prioridad = pd.read_excel(uploaded_file, sheet_name="Prioridad Clientes", index_col=0)
-df_minimos_raw = pd.read_excel(uploaded_file, sheet_name="Mínimos de Asignación")
-
-# Consolidar mínimos por (MES, Código, Cliente)
-df_minimos_raw = df_minimos_raw.dropna(subset=["MES", "Codigo", "Cliente"])
-df_minimos_raw["MES"] = df_minimos_raw["MES"].astype(int)
-
-df_minimos = df_minimos_raw.groupby(["MES", "Codigo", "Cliente"], as_index=True)["Minimo"].sum().to_frame()
-df_minimos["Pendiente"] = df_minimos["Minimo"]
-df_minimos_reset = df_minimos.reset_index()
 
 
 # Consolidar resultados
