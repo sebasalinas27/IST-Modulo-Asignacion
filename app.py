@@ -54,7 +54,6 @@ df_minimos = df_minimos_reset.set_index(["MES", "Codigo", "Cliente"]).sort_index
         df_stock = pd.read_excel(uploaded_file, sheet_name="Stock Disponible")
         df_prioridad = pd.read_excel(uploaded_file, sheet_name="Prioridad Clientes", index_col=0)
         df_minimos_raw = pd.read_excel(uploaded_file, sheet_name="Mínimos de Asignación")
-
         # Consolidar mínimos por (MES, Codigo, Cliente)
         df_minimos_raw = df_minimos_raw.dropna(subset=["MES", "Codigo", "Cliente"])
         df_minimos_raw["MES"] = df_minimos_raw["MES"].astype(int)
