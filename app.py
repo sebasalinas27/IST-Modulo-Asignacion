@@ -51,37 +51,17 @@ if duplicados.any():
 
 # Restaurar MultiIndex
 df_minimos = df_minimos_reset.set_index(["MES", "Codigo", "Cliente"]).sort_index()
-# Reasignación de stock arrastrado (de meses anteriores)
-for mes in meses_ordenados:
-    if mes > 1:
-        stock_ant = df_stock_filtrado.loc[(mes - 1, slice(None)), 'Stock Restante'].groupby(level=1).sum()
-        for codigo, valor in stock_ant.items():
-            if (mes, codigo) in df_stock_filtrado.index:
-                df_stock_filtrado.loc[(mes, codigo), 'Stock Disponible'] += valor
-                df_stock_filtrado.loc[(mes, codigo), 'Stock Restante'] += valor
+        df_stock = pd.read_excel(uploaded_file, sheet_name="Stock Disponible")
+        df_prioridad = pd.read_excel(uploaded_file, sheet_name="Prioridad Clientes", index_col=0)
+        df_minimos_raw = pd.read_excel(uploaded_file, sheet_name="Mínimos de Asignación")
 
-# Asignación directa sin creación de filas
-for (mes, codigo, cliente), fila in df_minimos.iterrows():
-    pendiente = fila["Pendiente"]
-    if pendiente <= 0:
-        continue
+        # Consolidar mínimos por (MES, Codigo, Cliente)
+        df_minimos_raw = df_minimos_raw.dropna(subset=["MES", "Codigo", "Cliente"])
+        df_minimos_raw["MES"] = df_minimos_raw["MES"].astype(int)
+        df_minimos = df_minimos_raw.groupby(["MES", "Codigo", "Cliente"], as_index=True)["Minimo"].sum().to_frame()
+        df_minimos["Pendiente"] = df_minimos["Minimo"]
 
-    if (mes, codigo) not in df_stock_filtrado.index:
-        continue
-
-    stock_disp = df_stock_filtrado.loc[(mes, codigo), "Stock Restante"]
-    if stock_disp <= 0:
-        continue
-
-    asignado = min(pendiente, stock_disp)
-
-    if (mes, codigo) in df_asignacion.index:
-        df_asignacion.at[(mes, codigo), cliente] += asignado
-    else:
-        df_asignacion.loc[(mes, codigo), cliente] = asignado
-
-    df_stock_filtrado.loc[(mes, codigo), "Stock Restante"] -= asignado
-    df_minimos.loc[(mes, codigo, cliente), "Pendiente"] -= asignado
+        df_minimos_reset = df_minimos.reset_index()
 # Consolidar resultados
 df_asignacion_reset = df_asignacion.reset_index().melt(id_vars=["MES", "Codigo"], var_name="Cliente", value_name="Asignado")
 asignado_total = df_asignacion_reset.groupby(["MES", "Codigo", "Cliente"])["Asignado"].sum()
