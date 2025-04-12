@@ -1,4 +1,3 @@
-# --- app.py FINAL ESTABLE con resumen de asignaciones no posibles ---
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -61,8 +60,6 @@ if uploaded_file:
                 df_stock_filtrado['Stock Restante'] = df_stock_filtrado['Stock Disponible']
 
                 codigos_comunes = set(df_stock_filtrado.index.get_level_values(1)) & set(df_minimos.index.get_level_values(1))
-                st.info(f"🔄 Se encontraron {len(codigos_comunes)} códigos comunes para asignación.")
-
                 df_stock_filtrado = df_stock_filtrado[df_stock_filtrado.index.get_level_values(1).isin(codigos_comunes)]
                 df_minimos = df_minimos[df_minimos.index.get_level_values(1).isin(codigos_comunes)]
 
@@ -71,7 +68,6 @@ if uploaded_file:
                 meses_ordenados = sorted(df_stock_filtrado.index.get_level_values(0).unique())
 
                 df_asignacion = pd.DataFrame(0, index=df_minimos.index.droplevel(2).unique(), columns=clientes_ordenados)
-                minimos_agregados = set()
 
                 for mes in meses_ordenados:
                     if mes > 1:
@@ -95,9 +91,9 @@ if uploaded_file:
                             if (mes, codigo) not in df_stock_filtrado.index:
                                 continue
 
-                            if idx_actual not in df_minimos.index and idx_actual not in minimos_agregados:
+                            if idx_actual not in df_minimos.index:
                                 df_minimos.loc[idx_actual] = [0, 0]
-                                minimos_agregados.add(idx_actual)
+                                df_minimos.sort_index(inplace=True)
 
                             stock_disp = df_stock_filtrado.loc[(mes, codigo), 'Stock Restante']
                             if isinstance(stock_disp, (pd.Series, np.ndarray)):
@@ -112,8 +108,7 @@ if uploaded_file:
                                 df_asignacion.at[(mes, codigo), cliente] += asignado
                                 df_stock_filtrado.at[(mes, codigo), 'Stock Restante'] -= asignado
                                 df_minimos.loc[idx, "Pendiente"] -= asignado
-
-                df_asignacion_reset = df_asignacion.reset_index().melt(id_vars=["MES", "Codigo"], var_name="Cliente", value_name="Asignado")
+                                df_asignacion_reset = df_asignacion.reset_index().melt(id_vars=["MES", "Codigo"], var_name="Cliente", value_name="Asignado")
                 asignado_total = df_asignacion_reset.groupby(["MES", "Codigo", "Cliente"])["Asignado"].sum()
                 asignado_total.index.names = ["MES", "Codigo", "Cliente"]
 
@@ -173,3 +168,4 @@ if uploaded_file:
 
     except Exception as e:
         st.error(f"❌ Error al procesar el archivo: {str(e)}")
+
