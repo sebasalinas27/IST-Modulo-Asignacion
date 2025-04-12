@@ -57,9 +57,11 @@ df_minimos_raw = pd.read_excel(uploaded_file, sheet_name="Mínimos de Asignació
 # Consolidar mínimos por (MES, Código, Cliente)
 df_minimos_raw = df_minimos_raw.dropna(subset=["MES", "Codigo", "Cliente"])
 df_minimos_raw["MES"] = df_minimos_raw["MES"].astype(int)
+
 df_minimos = df_minimos_raw.groupby(["MES", "Codigo", "Cliente"], as_index=True)["Minimo"].sum().to_frame()
 df_minimos["Pendiente"] = df_minimos["Minimo"]
 df_minimos_reset = df_minimos.reset_index()
+
 
 # Consolidar resultados
 df_asignacion_reset = df_asignacion.reset_index().melt(id_vars=["MES", "Codigo"], var_name="Cliente", value_name="Asignado")
