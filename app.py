@@ -51,15 +51,17 @@ if duplicados.any():
 
 # Restaurar MultiIndex
 df_minimos = df_minimos_reset.set_index(["MES", "Codigo", "Cliente"]).sort_index()
-        df_stock = pd.read_excel(uploaded_file, sheet_name="Stock Disponible")
-        df_prioridad = pd.read_excel(uploaded_file, sheet_name="Prioridad Clientes", index_col=0)
-        df_minimos_raw = pd.read_excel(uploaded_file, sheet_name="Mínimos de Asignación")
-        # Consolidar mínimos por (MES, Codigo, Cliente)
-        df_minimos_raw = df_minimos_raw.dropna(subset=["MES", "Codigo", "Cliente"])
-        df_minimos_raw["MES"] = df_minimos_raw["MES"].astype(int)
-        df_minimos = df_minimos_raw.groupby(["MES", "Codigo", "Cliente"], as_index=True)["Minimo"].sum().to_frame()
-        df_minimos["Pendiente"] = df_minimos["Minimo"]
-        df_minimos_reset = df_minimos.reset_index()
+df_stock = pd.read_excel(uploaded_file, sheet_name="Stock Disponible")
+df_prioridad = pd.read_excel(uploaded_file, sheet_name="Prioridad Clientes", index_col=0)
+df_minimos_raw = pd.read_excel(uploaded_file, sheet_name="Mínimos de Asignación")
+
+# Consolidar mínimos por (MES, Codigo, Cliente)
+df_minimos_raw = df_minimos_raw.dropna(subset=["MES", "Codigo", "Cliente"])
+df_minimos_raw["MES"] = df_minimos_raw["MES"].astype(int)
+df_minimos = df_minimos_raw.groupby(["MES", "Codigo", "Cliente"], as_index=True)["Minimo"].sum().to_frame()
+df_minimos["Pendiente"] = df_minimos["Minimo"]
+df_minimos_reset = df_minimos.reset_index()
+
 # Consolidar resultados
 df_asignacion_reset = df_asignacion.reset_index().melt(id_vars=["MES", "Codigo"], var_name="Cliente", value_name="Asignado")
 asignado_total = df_asignacion_reset.groupby(["MES", "Codigo", "Cliente"])["Asignado"].sum()
