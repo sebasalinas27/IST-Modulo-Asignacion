@@ -173,8 +173,9 @@ if uploaded_file:
             st.pyplot(fig3)
 
             # Mostrar resumen de cumplimiento por cliente en la web
-            st.subheader("📋 Resumen de Cumplimiento por Cliente")
-            st.dataframe(resumen_clientes.reset_index())
+            if "resumen_clientes" in locals():
+                st.subheader("📋 Resumen de Cumplimiento por Cliente")
+                st.dataframe(resumen_clientes.reset_index())
 
     except Exception as e:
         st.error(f"❌ Error al procesar el archivo: {e}")
