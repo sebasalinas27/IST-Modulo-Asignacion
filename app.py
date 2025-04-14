@@ -18,7 +18,7 @@ st.markdown(
     - `Prioridad Clientes`
 
     ---
-    📥 ¿No tienes un archivo?  
+    📅 ¿No tienes un archivo?  
     👉 [Descargar archivo de prueba](https://github.com/sebasalinas27/IST-Modulo-Asignacion/raw/main/Template_Pruebas_PIAT.xlsx)
     """
 )
@@ -102,6 +102,23 @@ if uploaded_file:
                             df_asignacion.at[(mes, codigo), cliente] = asignado
                             df_stock_filtrado.at[(mes, codigo), 'Stock Restante'] -= asignado
 
+            df_asignacion_reset = df_asignacion.reset_index()
+            df_linea = df_asignacion_reset.melt(id_vars=["MES", "Codigo"], var_name="Cliente", value_name="Asignado")
+            df_total_asignado = df_linea.groupby(["MES", "Codigo", "Cliente"])["Asignado"].sum()
+
+            df_minimos_check = df_minimos.copy()
+            df_minimos_check["Asignado"] = df_total_asignado.reindex(df_minimos.index, fill_value=0).astype(float)
+            df_minimos_check["Cumple"] = df_minimos_check["Asignado"] >= df_minimos_check["Minimo"]
+            df_minimos_check["Pendiente Final"] = df_minimos_check["Minimo"] - df_minimos_check["Asignado"]
+
+            resumen_clientes = df_minimos_check.groupby("Cliente").agg(
+                Total_Minimo=("Minimo", "sum"),
+                Total_Asignado=("Asignado", "sum")
+            )
+            resumen_clientes["% Cumplido"] = (
+                resumen_clientes["Total_Asignado"] / resumen_clientes["Total_Minimo"] * 100
+            ).round(2)
+
             output = io.BytesIO()
             with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
                 df_asignacion.to_excel(writer, sheet_name="Asignación Óptima")
@@ -113,7 +130,7 @@ if uploaded_file:
 
             st.success("✅ Optimización completada.")
             st.download_button(
-                label="📥 Descargar archivo Excel",
+                label="📅 Descargar archivo Excel",
                 data=output.getvalue(),
                 file_name="asignacion_resultados_completo.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -146,25 +163,9 @@ if uploaded_file:
             st.pyplot(fig2)
 
             # 3. Evolución de asignación por cliente
-            st.subheader("📈 Evolución de Asignación por Cliente")
-            df_asignacion_reset = df_asignacion.reset_index()
-            df_linea = df_asignacion_reset.melt(id_vars=["MES", "Codigo"], var_name="Cliente", value_name="Asignado")
-            df_total_asignado = df_linea.groupby(["MES", "Codigo", "Cliente"])["Asignado"].sum()
-
-            df_minimos_check = df_minimos.copy()
-            df_minimos_check["Asignado"] = df_total_asignado.reindex(df_minimos.index, fill_value=0).astype(float)
-            df_minimos_check["Cumple"] = df_minimos_check["Asignado"] >= df_minimos_check["Minimo"]
-            df_minimos_check["Pendiente Final"] = df_minimos_check["Minimo"] - df_minimos_check["Asignado"]
-
-            resumen_clientes = df_minimos_check.groupby("Cliente").agg(
-                Total_Minimo=("Minimo", "sum"),
-                Total_Asignado=("Asignado", "sum")
-            )
-            resumen_clientes["% Cumplido"] = (resumen_clientes["Total_Asignado"] / resumen_clientes["Total_Minimo"] * 100).round(2)
-
-            st.subheader("📋 Resumen de Cumplimiento por Cliente")
+            st.subheader("📈 Resumen de Cumplimiento por Cliente")
             st.dataframe(resumen_clientes.reset_index())
-            df_linea = df_asignacion_reset.melt(id_vars=["MES", "Codigo"], var_name="Cliente", value_name="Asignado")
+
             df_cliente_mes = df_linea.groupby(["MES", "Cliente"])["Asignado"].sum().reset_index()
             fig3, ax3 = plt.subplots(figsize=(10, 5))
             sns.lineplot(data=df_cliente_mes, x="MES", y="Asignado", hue="Cliente", marker="o", ax=ax3)
