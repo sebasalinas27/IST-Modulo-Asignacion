@@ -108,6 +108,7 @@ if uploaded_file:
                 df_stock_filtrado.to_excel(writer, sheet_name="Stock Disponible")
                 df_prioridad.to_excel(writer, sheet_name="Prioridad Clientes")
                 df_minimos.to_excel(writer, sheet_name="Mínimos de Asignación")
+                resumen_clientes.to_excel(writer, sheet_name="Resumen Clientes")
             output.seek(0)
 
             st.success("✅ Optimización completada.")
@@ -144,7 +145,23 @@ if uploaded_file:
             ax2.set_title("Stock Asignado vs Stock Restante por Mes")
             st.pyplot(fig2)
 
-            # 3. Evolución de asignación por cliente
+            # Calcular resumen de cumplimiento por cliente
+            df_asignacion_reset = df_asignacion.reset_index()
+            df_linea = df_asignacion_reset.melt(id_vars=["MES", "Codigo"], var_name="Cliente", value_name="Asignado")
+            df_total_asignado = df_linea.groupby(["MES", "Codigo", "Cliente"])["Asignado"].sum()
+
+            df_minimos_check = df_minimos.copy()
+            df_minimos_check["Asignado"] = df_total_asignado.reindex(df_minimos.index, fill_value=0).astype(float)
+            df_minimos_check["Cumple"] = df_minimos_check["Asignado"] >= df_minimos_check["Minimo"]
+            df_minimos_check["Pendiente Final"] = df_minimos_check["Minimo"] - df_minimos_check["Asignado"]
+
+            resumen_clientes = df_minimos_check.groupby("Cliente").agg(
+                Total_Minimo=("Minimo", "sum"),
+                Total_Asignado=("Asignado", "sum")
+            )
+            resumen_clientes["% Cumplido"] = (resumen_clientes["Total_Asignado"] / resumen_clientes["Total_Minimo"] * 100).round(2)
+
+# 3. Evolución de asignación por cliente
             st.subheader("📈 Evolución de Asignación por Cliente")
             df_asignacion_reset = df_asignacion.reset_index()
             df_linea = df_asignacion_reset.melt(id_vars=["MES", "Codigo"], var_name="Cliente", value_name="Asignado")
@@ -154,6 +171,10 @@ if uploaded_file:
             ax3.set_title("Asignación Total por Cliente en el Tiempo")
             ax3.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
             st.pyplot(fig3)
+
+            # Mostrar resumen de cumplimiento por cliente en la web
+            st.subheader("📋 Resumen de Cumplimiento por Cliente")
+            st.dataframe(resumen_clientes.reset_index())
 
     except Exception as e:
         st.error(f"❌ Error al procesar el archivo: {e}")
