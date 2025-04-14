@@ -63,6 +63,9 @@ if uploaded_file:
         st.write(f"- **Celdas con mínimo asignado**: {(df_minimos['Minimo'] > 0).sum()}")
 
         if st.button("🔁 Ejecutar Asignación"):
+            st.session_state["asignacion_realizada"] = True
+
+        if st.session_state.get("asignacion_realizada"):
             codigos_comunes = set(df_stock["Codigo"].unique()) & set(df_minimos_reset["Codigo"].unique())
             df_stock_filtrado = df_stock[df_stock["Codigo"].isin(codigos_comunes)].copy()
             df_minimos = df_minimos[df_minimos.index.get_level_values("Codigo").isin(codigos_comunes)]
@@ -101,7 +104,6 @@ if uploaded_file:
             )
             resumen_clientes["% Cumplido"] = (resumen_clientes["Total_Asignado"] / resumen_clientes["Total_Minimo"] * 100).round(2)
 
-            # GRAFICOS EN STREAMLIT
             st.subheader("📈 Cumplimiento por Cliente")
             fig1, ax1 = plt.subplots(figsize=(10, 4))
             sns.barplot(
