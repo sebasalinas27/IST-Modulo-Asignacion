@@ -145,7 +145,8 @@ if uploaded_file:
             ax2.set_title("Stock Asignado vs Stock Restante por Mes")
             st.pyplot(fig2)
 
-            # Calcular resumen de cumplimiento por cliente
+            # 3. Evolución de asignación por cliente
+            st.subheader("📈 Evolución de Asignación por Cliente")
             df_asignacion_reset = df_asignacion.reset_index()
             df_linea = df_asignacion_reset.melt(id_vars=["MES", "Codigo"], var_name="Cliente", value_name="Asignado")
             df_total_asignado = df_linea.groupby(["MES", "Codigo", "Cliente"])["Asignado"].sum()
@@ -161,9 +162,8 @@ if uploaded_file:
             )
             resumen_clientes["% Cumplido"] = (resumen_clientes["Total_Asignado"] / resumen_clientes["Total_Minimo"] * 100).round(2)
 
-# 3. Evolución de asignación por cliente
-            st.subheader("📈 Evolución de Asignación por Cliente")
-            df_asignacion_reset = df_asignacion.reset_index()
+            st.subheader("📋 Resumen de Cumplimiento por Cliente")
+            st.dataframe(resumen_clientes.reset_index())
             df_linea = df_asignacion_reset.melt(id_vars=["MES", "Codigo"], var_name="Cliente", value_name="Asignado")
             df_cliente_mes = df_linea.groupby(["MES", "Cliente"])["Asignado"].sum().reset_index()
             fig3, ax3 = plt.subplots(figsize=(10, 5))
@@ -171,11 +171,6 @@ if uploaded_file:
             ax3.set_title("Asignación Total por Cliente en el Tiempo")
             ax3.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
             st.pyplot(fig3)
-
-            # Mostrar resumen de cumplimiento por cliente en la web
-            if "resumen_clientes" in locals():
-                st.subheader("📋 Resumen de Cumplimiento por Cliente")
-                st.dataframe(resumen_clientes.reset_index())
 
     except Exception as e:
         st.error(f"❌ Error al procesar el archivo: {e}")
