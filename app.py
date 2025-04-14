@@ -101,6 +101,52 @@ if uploaded_file:
             )
             resumen_clientes["% Cumplido"] = (resumen_clientes["Total_Asignado"] / resumen_clientes["Total_Minimo"] * 100).round(2)
 
+            # GRAFICOS EN STREAMLIT
+            st.subheader("📈 Cumplimiento por Cliente")
+            fig1, ax1 = plt.subplots(figsize=(10, 4))
+            sns.barplot(
+                data=resumen_clientes.reset_index(),
+                x="Cliente", y="% Cumplido", palette="Blues_d", ax=ax1
+            )
+            ax1.set_title("Porcentaje de Cumplimiento por Cliente")
+            ax1.set_ylim(0, 110)
+            ax1.set_ylabel("% Cumplido")
+            ax1.set_xlabel("Cliente")
+            plt.xticks(rotation=45)
+            st.pyplot(fig1)
+
+            st.subheader("🏆 Top 10 Clientes por Asignación Total")
+            top_clientes = resumen_clientes.sort_values("Total_Asignado", ascending=False).head(10)
+            fig2, ax2 = plt.subplots(figsize=(10, 4))
+            sns.barplot(
+                data=top_clientes.reset_index(),
+                x="Cliente", y="Total_Asignado", palette="Greens_d", ax=ax2
+            )
+            ax2.set_title("Top 10 Clientes - Total Asignado")
+            ax2.set_ylabel("Unidades Asignadas")
+            ax2.set_xlabel("Cliente")
+            plt.xticks(rotation=45)
+            st.pyplot(fig2)
+
+            st.subheader("📦 Stock Restante por Mes")
+            stock_restante_mes = df_stock_filtrado.reset_index().groupby("MES")["Stock Restante"].sum().reset_index()
+            fig3, ax3 = plt.subplots(figsize=(8, 4))
+            sns.barplot(data=stock_restante_mes, x="MES", y="Stock Restante", palette="Reds_d", ax=ax3)
+            ax3.set_title("Distribución de Stock Restante por Mes")
+            ax3.set_ylabel("Unidades sin Asignar")
+            ax3.set_xlabel("Mes")
+            st.pyplot(fig3)
+
+            st.subheader("📅 Flujo de Asignación por Mes")
+            flujo_mes = df_asignacion_reset.groupby("MES")["Asignado"].sum().reset_index()
+            fig4, ax4 = plt.subplots(figsize=(8, 4))
+            sns.lineplot(data=flujo_mes, x="MES", y="Asignado", marker="o", ax=ax4)
+            ax4.set_title("Flujo de Asignación Total por Mes")
+            ax4.set_ylabel("Unidades Asignadas")
+            ax4.set_xlabel("Mes")
+            ax4.grid(True)
+            st.pyplot(fig4)
+
             output = io.BytesIO()
             with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
                 df_asignacion.to_excel(writer, sheet_name="Asignación Óptima")
