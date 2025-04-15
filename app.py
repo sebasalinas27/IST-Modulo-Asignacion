@@ -29,7 +29,7 @@ uploaded_file = st.file_uploader("Sube tu archivo Excel", type=["xlsx"])
 # Ayuda expandible
 with st.expander("ℹ️ ¿Cómo interpretar el archivo descargado?"):
     st.markdown("""
-    El archivo de resultados contiene dos hojas principales:
+    El archivo de resultados contiene varias hojas:
 
     ### 📄 Asignación Óptima
     - Filas: cada producto (`Código`) por mes
@@ -39,6 +39,9 @@ with st.expander("ℹ️ ¿Cómo interpretar el archivo descargado?"):
     ### 📄 Stock Disponible
     - `Stock Disponible`: lo que se tenía
     - `Stock Restante`: lo que no se asignó
+
+    ### 📄 Resumen Clientes
+    - Total asignado por cliente
     """)
 
 with st.expander("❗ Tips para evitar errores"):
@@ -84,7 +87,7 @@ if uploaded_file:
                             df_stock_filtrado.loc[(mes, codigo), 'Stock Disponible'] += valor
                             df_stock_filtrado.loc[(mes, codigo), 'Stock Restante'] += valor
 
-                df_stock_mes = df_stock_filtrado.loc[mes]
+                df_stock_mes = df_stock_filtrado.loc[mes].copy()
                 df_minimos_mes = df_minimos.loc[mes] if mes in df_minimos.index else pd.DataFrame()
 
                 for cliente in clientes_ordenados:
@@ -114,12 +117,19 @@ if uploaded_file:
             ax.set_title("Resumen Total por Cliente")
             st.pyplot(fig)
 
-            # ✅ Exportar Excel con asignación y stock restante
+            # ✅ Mostrar resumen como tabla
+            st.markdown("### 🧾 Vista previa resumen por cliente")
+            st.dataframe(resumen_clientes.reset_index().rename(columns={"index": "Cliente", 0: "Total Asignado"}))
+
+            # ✅ Exportar Excel con todas las hojas
             st.subheader("📤 Descargar Resultados")
             output = io.BytesIO()
             with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
                 df_asignacion.to_excel(writer, sheet_name='Asignación Óptima')
                 df_stock_filtrado.reset_index().to_excel(writer, sheet_name='Stock Disponible', index=False)
+                df_prioridad.to_excel(writer, sheet_name='Prioridad Clientes')
+                df_minimos.reset_index().to_excel(writer, sheet_name='Mínimos de Asignación', index=False)
+                resumen_clientes.reset_index().rename(columns={0: 'Total Asignado'}).to_excel(writer, sheet_name='Resumen Clientes', index=False)
             output.seek(0)
             st.download_button(
                 label="📥 Descargar Excel con resultados",
