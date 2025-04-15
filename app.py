@@ -48,8 +48,6 @@ with st.expander("❗ Tips para evitar errores"):
     - Solo formato `.xlsx`
     """)
 
-df_asignacion = pd.DataFrame()
-
 if uploaded_file:
     try:
         df_stock = pd.read_excel(uploaded_file, sheet_name="Stock Disponible")
@@ -101,3 +99,34 @@ if uploaded_file:
                             asignado = min(minimo, stock_disp) if stock_disp >= minimo else stock_disp
                             df_asignacion.at[(mes, codigo), cliente] = asignado
                             df_stock_filtrado.at[(mes, codigo), 'Stock Restante'] -= asignado
+
+            # ✅ Mostrar resultados en pantalla
+            st.subheader("📥 Vista previa de la Asignación Óptima")
+            st.dataframe(df_asignacion.head(20))
+
+            # ✅ Agregar gráfico resumen por cliente
+            st.subheader("📈 Total Asignado por Cliente")
+            resumen_clientes = df_asignacion.sum().sort_values(ascending=False)
+            fig, ax = plt.subplots(figsize=(10, 4))
+            sns.barplot(x=resumen_clientes.index, y=resumen_clientes.values, ax=ax)
+            ax.set_ylabel("Unidades Asignadas")
+            ax.set_xlabel("Cliente")
+            ax.set_title("Resumen Total por Cliente")
+            st.pyplot(fig)
+
+            # ✅ Exportar Excel con asignación y stock restante
+            st.subheader("📤 Descargar Resultados")
+            output = io.BytesIO()
+            with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                df_asignacion.to_excel(writer, sheet_name='Asignación Óptima')
+                df_stock_filtrado.reset_index().to_excel(writer, sheet_name='Stock Disponible', index=False)
+            output.seek(0)
+            st.download_button(
+                label="📥 Descargar Excel con resultados",
+                data=output,
+                file_name="asignacion_resultados_PIAT.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+
+    except Exception as e:
+        st.error(f"❌ Error al procesar el archivo: {e}")
