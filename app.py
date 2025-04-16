@@ -114,6 +114,15 @@ if uploaded_file:
             df_minimos["Pendiente Final"] = df_minimos["Minimo"] - df_minimos["Asignado"]
 
             resumen = df_minimos[df_minimos["Minimo"] > 0].groupby("Cliente").agg(
+                Total_Minimo=("Minimo", "sum")
+            ).reset_index()
+
+            total_asignado = df_asignacion.sum().reset_index()
+            total_asignado.columns = ["Cliente", "Total_Asignado"]
+
+            resumen = pd.merge(resumen, total_asignado, on="Cliente", how="outer")
+            resumen["% Cumplido"] = (resumen["Total_Asignado"] / resumen["Total_Minimo"] * 100).round(2)
+            resumen = resumen.fillna(0).sort_values("% Cumplido", ascending=False).agg(
                 Total_Minimo=("Minimo", "sum"),
                 Total_Asignado=("Asignado", "sum")
             )
@@ -162,7 +171,6 @@ if uploaded_file:
             st.pyplot(fig3)
 
             
-
             st.download_button(
             label="📥 Descargar archivo Excel",
             data=output.getvalue(),
