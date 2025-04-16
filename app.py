@@ -155,19 +155,19 @@ if uploaded_file:
         st.pyplot(fig3)
 
             # 🔍 Filtros dinámicos interactivos
-st.subheader("🔎 Explorar asignación filtrada")
-clientes_disp = df_asignacion.columns.tolist()
-codigos_disp = df_asignacion.index.get_level_values("Codigo").unique().tolist()
-meses_disp = sorted(df_asignacion.index.get_level_values("MES").unique())
+            st.subheader("🔎 Explorar asignación filtrada")
+            clientes_disp = df_asignacion.columns.tolist()
+            codigos_disp = df_asignacion.index.get_level_values("Codigo").unique().tolist()
+            meses_disp = sorted(df_asignacion.index.get_level_values("MES").unique())
 
-cliente_sel = st.selectbox("Selecciona cliente", clientes_disp)
-mes_sel = st.selectbox("Selecciona mes", meses_disp)
+            cliente_sel = st.selectbox("Selecciona cliente", clientes_disp)
+            mes_sel = st.selectbox("Selecciona mes", meses_disp)
 
-df_filtro = df_asignacion.loc[(mes_sel, slice(None)), cliente_sel].reset_index()
-df_filtro = df_filtro[df_filtro[cliente_sel] > 0].sort_values(by=cliente_sel, ascending=False)
+            df_filtro = df_asignacion.loc[(mes_sel, slice(None)), cliente_sel].reset_index()
+            df_filtro = df_filtro[df_filtro[cliente_sel] > 0].sort_values(by=cliente_sel, ascending=False)
 
-st.markdown(f"### Resultados para **{cliente_sel}** en mes **{mes_sel}**")
-st.dataframe(df_filtro.rename(columns={cliente_sel: "Unidades Asignadas"}))
+            st.markdown(f"### Resultados para **{cliente_sel}** en mes **{mes_sel}**")
+            st.dataframe(df_filtro.rename(columns={cliente_sel: "Unidades Asignadas"}))
 
     except Exception as e:
         st.error(f"❌ Error al procesar el archivo: {e}")
