@@ -154,6 +154,8 @@ if uploaded_file:
         ax3.set_title("Distribución de stock por mes")
         st.pyplot(fig3)
 
+            
+
             # 🔍 Filtros dinámicos interactivos
             st.subheader("🔎 Explorar asignación filtrada")
             clientes_disp = df_asignacion.columns.tolist()
