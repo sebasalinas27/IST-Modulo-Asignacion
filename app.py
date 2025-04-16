@@ -114,6 +114,17 @@ if uploaded_file:
             df_minimos["Pendiente Final"] = df_minimos["Minimo"] - df_minimos["Asignado"]
 
             resumen = df_minimos[df_minimos["Minimo"] > 0].groupby("Cliente").agg(
+    Total_Minimo=("Minimo", "sum")
+).reset_index()
+
+# Asignaciones reales desde la matriz df_asignacion
+asignado_real = df_asignacion.sum().reset_index()
+asignado_real.columns = ["Cliente", "Total_Asignado"]
+
+# Merge y cálculo de % cumplido
+resumen = pd.merge(resumen, asignado_real, on="Cliente", how="outer")
+resumen["% Cumplido"] = (resumen["Total_Asignado"] / resumen["Total_Minimo"] * 100).round(2)
+resumen = resumen.fillna(0).sort_values("% Cumplido", ascending=False).agg(
                 Total_Minimo=("Minimo", "sum")
             ).reset_index()
 
