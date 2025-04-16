@@ -10,6 +10,17 @@ st.set_page_config(page_title="PIAT - Asignación de Stock", layout="centered")
 st.title("📦 IST - Asignación de Stock por Cliente y Mes (v1.3)")
 
 st.markdown("""
+### ✅ ¿Qué hace este módulo?
+
+- Asigna productos considerando **mínimos requeridos por cliente y mes**
+- Utiliza el **stock restante de meses anteriores**
+- Prioriza clientes por nivel definido (1 es mayor prioridad)
+- Aprovecha el stock no solicitado asignándolo a un cliente ficticio **PUSH**
+- Calcula el **% de cumplimiento** por cliente y reporta pendientes
+- Exporta un archivo Excel con todas las vistas necesarias
+""")
+
+st.markdown("""
 Sube tu archivo Excel con las siguientes hojas:
 - `Stock Disponible`
 - `Mínimos de Asignación`
