@@ -41,7 +41,7 @@ with st.expander("ℹ️ ¿Cómo interpretar el archivo descargado?"):
     - `Stock Restante`: lo que no se asignó
 
     ### 📄 Resumen Clientes
-    - Total asignado por cliente
+    - Total mínimo, total asignado y % de cumplimiento
     """)
 
 with st.expander("❗ Tips para evitar errores"):
@@ -107,19 +107,22 @@ if uploaded_file:
             st.subheader("📥 Vista previa de la Asignación Óptima")
             st.dataframe(df_asignacion.head(20))
 
-            # ✅ Agregar gráfico resumen por cliente
-            st.subheader("📈 Total Asignado por Cliente")
-            resumen_clientes = df_asignacion.sum().sort_values(ascending=False)
-            fig, ax = plt.subplots(figsize=(10, 4))
-            sns.barplot(x=resumen_clientes.index, y=resumen_clientes.values, ax=ax)
-            ax.set_ylabel("Unidades Asignadas")
-            ax.set_xlabel("Cliente")
-            ax.set_title("Resumen Total por Cliente")
-            st.pyplot(fig)
+            # ✅ Crear resumen con mínimo, asignado y % cumplido
+            st.subheader("📈 Cumplimiento por Cliente")
+
+            minimos_por_cliente = df_minimos.reset_index().groupby("Cliente")["Minimo"].sum()
+            asignado_por_cliente = df_asignacion.sum()
+
+            resumen_clientes = pd.DataFrame({
+                "Total_Mínimo": minimos_por_cliente,
+                "Total_Asignado": asignado_por_cliente
+            })
+            resumen_clientes["% Cumplido"] = (resumen_clientes["Total_Asignado"] / resumen_clientes["Total_Mínimo"] * 100).round(2)
+            resumen_clientes = resumen_clientes.sort_values("% Cumplido", ascending=False)
 
             # ✅ Mostrar resumen como tabla
             st.markdown("### 🧾 Vista previa resumen por cliente")
-            st.dataframe(resumen_clientes.reset_index().rename(columns={"index": "Cliente", 0: "Total Asignado"}))
+            st.dataframe(resumen_clientes.reset_index())
 
             # ✅ Exportar Excel con todas las hojas
             st.subheader("📤 Descargar Resultados")
@@ -129,7 +132,7 @@ if uploaded_file:
                 df_stock_filtrado.reset_index().to_excel(writer, sheet_name='Stock Disponible', index=False)
                 df_prioridad.to_excel(writer, sheet_name='Prioridad Clientes')
                 df_minimos.reset_index().to_excel(writer, sheet_name='Mínimos de Asignación', index=False)
-                resumen_clientes.reset_index().rename(columns={0: 'Total Asignado'}).to_excel(writer, sheet_name='Resumen Clientes', index=False)
+                resumen_clientes.reset_index().to_excel(writer, sheet_name='Resumen Clientes', index=False)
             output.seek(0)
             st.download_button(
                 label="📥 Descargar Excel con resultados",
