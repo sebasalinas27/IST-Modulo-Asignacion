@@ -167,7 +167,7 @@ df_filtro = df_asignacion.loc[(mes_sel, slice(None)), cliente_sel].reset_index()
 df_filtro = df_filtro[df_filtro[cliente_sel] > 0].sort_values(by=cliente_sel, ascending=False)
 
 st.markdown(f"### Resultados para **{cliente_sel}** en mes **{mes_sel}**")
-st.dataframe(df_filtro.rename(columns={cliente_sel: "Unidades Asignadas"})))
+st.dataframe(df_filtro.rename(columns={cliente_sel: "Unidades Asignadas"}))
 
     except Exception as e:
         st.error(f"❌ Error al procesar el archivo: {e}")
