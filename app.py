@@ -1,4 +1,4 @@
-# ✅ PIAT v1.3 - Versión simplificada sin resumen de clientes
+# ✅ PIAT v1.3 - Versión con propuesta PUSH separada
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -121,35 +121,6 @@ if uploaded_file:
             output.seek(0)
 
             st.success("✅ Optimización completada.")
-
-            st.subheader("📊 Total asignado por cliente")
-            asignado_total = df_asignacion.sum().sort_values(ascending=False)
-            fig1, ax1 = plt.subplots(figsize=(10, 4))
-            sns.barplot(x=asignado_total.index, y=asignado_total.values, ax=ax1)
-            ax1.set_title("Total Asignado por Cliente")
-            ax1.set_ylabel("Unidades Asignadas")
-            ax1.set_xlabel("Cliente")
-            ax1.tick_params(axis='x', rotation=45)
-            st.pyplot(fig1)
-
-            st.subheader("📈 Evolución mensual por cliente")
-            df_plot = df_asignacion.reset_index().melt(id_vars=["MES", "Codigo"], var_name="Cliente", value_name="Asignado")
-            df_cliente_mes = df_plot.groupby(["MES", "Cliente"])["Asignado"].sum().reset_index()
-            fig2, ax2 = plt.subplots(figsize=(10, 5))
-            sns.lineplot(data=df_cliente_mes, x="MES", y="Asignado", hue="Cliente", marker="o", ax=ax2)
-            ax2.set_title("Evolución mensual de asignación")
-            ax2.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-            st.pyplot(fig2)
-
-            st.subheader("📦 Stock asignado vs restante por mes")
-            df_stock_total = df_stock.reset_index().groupby("MES")[["Stock Disponible", "Stock Restante"]].sum()
-            df_stock_total["Stock Asignado"] = df_stock_total["Stock Disponible"] - df_stock_total["Stock Restante"]
-            df_melted = df_stock_total[["Stock Asignado", "Stock Restante"]].reset_index().melt(id_vars="MES", var_name="Tipo", value_name="Unidades")
-            fig3, ax3 = plt.subplots(figsize=(8, 4))
-            sns.barplot(data=df_melted, x="MES", y="Unidades", hue="Tipo", ax=ax3)
-            ax3.set_title("Distribución de stock por mes")
-            st.pyplot(fig3)
-
             st.download_button(
                 label="📥 Descargar archivo Excel",
                 data=output.getvalue(),
@@ -157,8 +128,8 @@ if uploaded_file:
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
 
-            # --- Proceso separado: Propuesta de Reasignación PUSH ---
             st.subheader("📤 Generar hoja de propuesta PUSH (opcional)")
+
             if st.button("Generar propuesta de reasignación PUSH"):
                 df_push = df_asignacion.reset_index().melt(id_vars=["MES", "Codigo"], var_name="Cliente", value_name="Asignado")
                 df_push = df_push[df_push["Cliente"] == "PUSH"]
@@ -198,14 +169,19 @@ if uploaded_file:
                     output_push = io.BytesIO()
                     with pd.ExcelWriter(output_push, engine="xlsxwriter") as writer:
                         df_recomendaciones.to_excel(writer, sheet_name="Propuesta Reasignación PUSH", index=False)
-                    st.download_button(
-                        label="📥 Descargar propuesta PUSH",
-                        data=output_push.getvalue(),
-                        file_name="propuesta_reasignacion_push.xlsx"
-                    )
+                    st.session_state["push_result"] = output_push.getvalue()
+                    st.session_state["push_ready"] = True
                     st.success("✅ Propuesta PUSH generada correctamente")
                 else:
+                    st.session_state["push_ready"] = False
                     st.info("No hay sugerencias posibles a partir de los datos cargados.")
+
+            if st.session_state.get("push_ready", False):
+                st.download_button(
+                    label="📥 Descargar propuesta PUSH",
+                    data=st.session_state["push_result"],
+                    file_name="propuesta_reasignacion_push.xlsx"
+                )
 
     except Exception as e:
         st.error(f"❌ Error al procesar el archivo: {e}")
