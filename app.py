@@ -29,11 +29,10 @@ Sube tu archivo Excel con las siguientes hojas:
 - `Mínimos de Asignación`
 - `Prioridad Clientes`
 
-    ---
-    📅 ¿No tienes un archivo?  
-    👉 [Descargar archivo de prueba](https://github.com/sebasalinas27/IST-Modulo-Asignacion/raw/main/Template_Pruebas_PIAT.xlsx)
-    """
-)
+---
+📥 ¿No tienes un archivo?  
+👉 [Descargar archivo de prueba](https://github.com/sebasalinas27/IST-Modulo-Asignacion/raw/main/Template_Pruebas_PIAT.xlsx)
+""")
 
 # --- 2. Carga del archivo ---
 archivo = st.file_uploader("Sube tu archivo Excel", type=["xlsx"])
@@ -56,12 +55,11 @@ if archivo:
     clientes = df_minimos.columns[1:]
     codigos = sorted(df_minimos["Codigo"].unique())
 
-    # --- 4. Preparar el modelo de optimización ---
     n = len(codigos)
     m = len(clientes)
 
-    c = []  # Función objetivo (minimizar prioridad)
-    A_eq = []  # Restricción de stock por código
+    c = []
+    A_eq = []
     b_eq = []
     bounds = []
 
@@ -80,7 +78,6 @@ if archivo:
             minimo = fila_min[j]
             bounds.append((minimo, None))
 
-    # --- 5. Resolver el modelo ---
     resultado = linprog(c=c, A_eq=A_eq, b_eq=b_eq, bounds=bounds, method="highs")
 
     if resultado.success:
@@ -97,7 +94,6 @@ if archivo:
 
         df_resultado_optimo = pd.DataFrame(filas)
 
-        # --- 6.X - Agregar fila para códigos con stock no asignado ---
         stock_total = df_stock.groupby("Codigo")["Stock Disponible"].sum()
         asignado_total = df_resultado_optimo.groupby("Codigo")["Asignado"].sum()
         diferencias = stock_total.subtract(asignado_total, fill_value=0)
@@ -113,7 +109,6 @@ if archivo:
         df_resultado_optimo["Motivo"] = "Asignación óptima"
         df_resultado_final = pd.concat([df_resultado_optimo, df_no_asignado], ignore_index=True)
 
-        # --- 6.Y - Generar propuesta de asignación PUSH futura ---
         df_push = df_resultado_final[df_resultado_final["Cliente"] == "PUSH"]
         df_cumplidos = df_resultado_optimo.copy()
         df_cumplidos = df_cumplidos.merge(df_minimos.melt(id_vars="Codigo", var_name="Cliente", value_name="Minimo"),
@@ -126,58 +121,23 @@ if archivo:
             codigo, mes, push_qty = fila["Codigo"], fila["Mes"], fila["Asignado"]
             clientes_candidatos = df_cumplidos[(df_cumplidos["Codigo"] == codigo) & (df_cumplidos["Mes"] == mes)]
             for _, row in clientes_candidatos.iterrows():
-                diferencia = push_qty
                 recomendaciones.append({
                     "Codigo": codigo,
                     "Mes": mes,
                     "Cliente Propuesto": row["Cliente"],
                     "Asignado Actual": row["Asignado"],
                     "Minimo Requerido": row["Minimo"],
-                    "Diferencia Potencial": diferencia,
+                    "Diferencia Potencial": push_qty,
                     "Prioridad": row["Prioridad"]
                 })
 
         df_recomendaciones = pd.DataFrame(recomendaciones)
         df_recomendaciones = df_recomendaciones.sort_values(by=["Codigo", "Mes", "Prioridad"])
 
-        # --- 7. Visualizaciones ---
-        st.subheader("📊 Total asignado por cliente")
-        asignado_total_cliente = df_resultado_final.groupby("Cliente")["Asignado"].sum().sort_values(ascending=False)
-        fig1, ax1 = plt.subplots(figsize=(10, 4))
-        sns.barplot(x=asignado_total_cliente.index, y=asignado_total_cliente.values, ax=ax1)
-        ax1.set_title("Total Asignado por Cliente")
-        ax1.set_ylabel("Unidades Asignadas")
-        ax1.set_xlabel("Cliente")
-        ax1.tick_params(axis='x', rotation=45)
-        st.pyplot(fig1)
-
-        st.subheader("📈 Evolución mensual por cliente")
-        df_evolucion = df_resultado_final.groupby(["Mes", "Cliente"])["Asignado"].sum().reset_index()
-        fig2, ax2 = plt.subplots(figsize=(10, 5))
-        sns.lineplot(data=df_evolucion, x="Mes", y="Asignado", hue="Cliente", marker="o", ax=ax2)
-        ax2.set_title("Evolución mensual de asignación")
-        ax2.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-        st.pyplot(fig2)
-
-        st.subheader("📦 Stock asignado vs restante por código")
-        df_stock_codigo = df_stock.set_index("Codigo")
-        df_stock_codigo["Asignado"] = asignado_total
-        df_stock_codigo["Restante"] = df_stock_codigo["Stock Disponible"] - df_stock_codigo["Asignado"].fillna(0)
-        df_stock_codigo = df_stock_codigo.reset_index()
-        df_melted = df_stock_codigo.melt(id_vars="Codigo", value_vars=["Asignado", "Restante"], var_name="Tipo", value_name="Unidades")
-        fig3, ax3 = plt.subplots(figsize=(12, 4))
-        sns.barplot(data=df_melted, x="Codigo", y="Unidades", hue="Tipo", ax=ax3)
-        ax3.set_title("Distribución de stock por código")
-        ax3.tick_params(axis='x', rotation=90)
-        st.pyplot(fig3)
-
-        # --- 8. Exportar resultados ---
         st.success("Asignación finalizada y exportada correctamente")
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
             df_resultado_final.to_excel(writer, sheet_name="Asignación óptima", index=False)
-
-            # --- 9. Hoja adicional en formato ancho (pivot por cliente) ---
             df_pivot = df_resultado_final.pivot_table(
                 index=["Mes", "Codigo"],
                 columns="Cliente",
@@ -185,10 +145,7 @@ if archivo:
                 fill_value=0
             ).reset_index()
             df_pivot.to_excel(writer, sheet_name="Asignación Pivot", index=False)
-
-            # --- 10. Hoja adicional de recomendaciones PUSH ---
             df_recomendaciones.to_excel(writer, sheet_name="Propuesta Reasignación PUSH", index=False)
-
         st.download_button("📥 Descargar resultado", data=output.getvalue(), file_name="asignacion_resultados_PIAT_v1_4.xlsx")
 
     else:
