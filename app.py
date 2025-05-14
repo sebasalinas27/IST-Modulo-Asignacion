@@ -90,16 +90,13 @@ if archivo:
             df_stock = df_stock[df_stock["Stock Disponible"] > 0].copy()
             df_stock = df_stock.set_index(["MES", "Codigo"]).sort_index()
             df_stock["Stock Restante"] = df_stock["Stock Disponible"]
+            meses = sorted(df_stock.index.get_level_values(0).unique())
             for mes in meses:
                 if mes > min(meses):
                     stock_ant = df_stock.loc[(mes-1, slice(None)), "Stock Restante"].groupby(level=1).sum()
                     for codigo, valor in stock_ant.items():
                         if (mes, codigo) in df_stock.index:
                             df_stock.loc[(mes, codigo), ["Stock Disponible", "Stock Restante"]] += valor
-
-                    if stock_codigo_df.empty:
-                st.warning(f"Código {codigo} no tiene stock disponible. Se omite del modelo.")
-                continue
 
             stock_disp = stock_codigo_df["Stock Disponible"].sum()
 
