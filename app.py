@@ -59,28 +59,19 @@ if archivo:
         mes_actual = datetime.now().strftime("%Y-%m")
 
         # --- 3. Filtrado, acumulación y preparación de datos ---
+        meses = sorted(df_stock.index.get_level_values(0).unique())
+        for mes in meses:
+            if mes > min(meses):
+                stock_ant = df_stock.loc[(mes-1, slice(None)), "Stock Restante"].groupby(level=1).sum()
+                for codigo, valor in stock_ant.items():
+                    if (mes, codigo) in df_stock.index:
+                        df_stock.loc[(mes, codigo), ["Stock Disponible", "Stock Restante"]] += valor
         codigos_comunes = set(df_stock["Codigo"]).intersection(set(df_minimos["Codigo"]))
         df_stock = df_stock[df_stock["Codigo"].isin(codigos_comunes)]
         df_minimos = df_minimos[df_minimos["Codigo"].isin(codigos_comunes)]
 
         df_prioridad["Prioridad"] = pd.to_numeric(df_prioridad["Prioridad"], errors='coerce')
         df_prioridad = df_prioridad.dropna(subset=["Prioridad"])
-
-        if 'MES' in df_stock.columns:
-            df_stock = df_stock[df_stock["Stock Disponible"] > 0].copy()
-            df_stock = df_stock.set_index(["MES", "Codigo"]).sort_index()
-            df_stock["Stock Restante"] = df_stock["Stock Disponible"]
-
-            meses = sorted(df_stock.index.get_level_values(0).unique())
-            for mes in meses:
-                if mes > min(meses):
-                    stock_ant = df_stock.loc[(mes-1, slice(None)), "Stock Restante"].groupby(level=1).sum()
-                    for codigo, valor in stock_ant.items():
-                        if (mes, codigo) in df_stock.index:
-                            df_stock.loc[(mes, codigo), ["Stock Disponible", "Stock Restante"]] += valor
-        else:
-            df_stock = df_stock[df_stock["Stock Disponible"] > 0].copy()
-            df_stock["Stock Restante"] = df_stock["Stock Disponible"]
 
         clientes = df_minimos.columns[1:]
         codigos = sorted(df_minimos["Codigo"].unique())
@@ -95,9 +86,45 @@ if archivo:
 
         prioridad_dict = df_prioridad.set_index("Cliente")["Prioridad"].to_dict()
 
+        if 'MES' in df_stock.columns:
+            df_stock = df_stock[df_stock["Stock Disponible"] > 0].copy()
+            df_stock = df_stock.set_index(["MES", "Codigo"]).sort_index()
+            df_stock["Stock Restante"] = df_stock["Stock Disponible"]
+            for mes in meses:
+                if mes > min(meses):
+                    stock_ant = df_stock.loc[(mes-1, slice(None)), "Stock Restante"].groupby(level=1).sum()
+                    for codigo, valor in stock_ant.items():
+                        if (mes, codigo) in df_stock.index:
+                            df_stock.loc[(mes, codigo), ["Stock Disponible", "Stock Restante"]] += valor
+
+                    if stock_codigo_df.empty:
+                st.warning(f"Código {codigo} no tiene stock disponible. Se omite del modelo.")
+                continue
+
+            stock_disp = stock_codigo_df["Stock Disponible"].sum()
+
+            c.extend([prioridad_dict.get(cliente, 5) for cliente in clientes])
+            A_row = [1 if j // m == i else 0 for j in range(n * m)]
+            A_eq.append(A_row)
+            b_eq.append(stock_disp)
+
+            for j, cliente in enumerate(clientes):
+                minimo = fila_min[j]
+                bounds.append((minimo, None))
+
         for i, codigo in enumerate(codigos):
             fila_min = df_minimos[df_minimos["Codigo"] == codigo][clientes].values.flatten()
-            stock_disp = df_stock[df_stock.reset_index()["Codigo"] == codigo]["Stock Disponible"].values[0] if "Codigo" in df_stock.reset_index().columns else df_stock.xs(codigo, level=1)["Stock Disponible"].sum()
+
+            if isinstance(df_stock.index, pd.MultiIndex):
+                stock_codigo_df = df_stock.xs(codigo, level=1, drop_level=False)
+            else:
+                stock_codigo_df = df_stock[df_stock["Codigo"] == codigo]
+
+            if stock_codigo_df.empty:
+                st.warning(f"Código {codigo} no tiene stock disponible. Se omite del modelo.")
+                continue
+
+            stock_disp = stock_codigo_df["Stock Disponible"].sum()
 
             c.extend([prioridad_dict.get(cliente, 5) for cliente in clientes])
             A_row = [1 if j // m == i else 0 for j in range(n * m)]
