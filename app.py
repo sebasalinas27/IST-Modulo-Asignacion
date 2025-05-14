@@ -35,6 +35,7 @@ Sube tu archivo Excel con las siguientes hojas:
 """)
 
 # --- 2. Carga del archivo y vista previa + resumen ---
+# --- Paso 1 agregado: incluir códigos no coincidentes en stock ---
 archivo = st.file_uploader("Sube tu archivo Excel", type=["xlsx"])
 if archivo:
     st.subheader("📋 Vista previa de la carga")
@@ -42,6 +43,17 @@ if archivo:
     df_stock = pd.read_excel(xls, sheet_name="Stock Disponible")
     df_minimos = pd.read_excel(xls, sheet_name="Mínimos de Asignación")
     df_prioridad = pd.read_excel(xls, sheet_name="Prioridad Clientes")
+
+    
+    # Paso 1: Incluir códigos en stock pero no en mínimos
+    codigos_extra_stock = set(df_stock["Codigo"]) - set(df_minimos["Codigo"])
+    if codigos_extra_stock:
+        clientes = [col for col in df_minimos.columns if col != "Codigo"]
+        registros_extra = pd.DataFrame([
+            {"Codigo": cod, **{cliente: 0 for cliente in clientes}}
+            for cod in codigos_extra_stock
+        ])
+        df_minimos = pd.concat([df_minimos, registros_extra], ignore_index=True)
 
     st.write("**Hojas detectadas:**", xls.sheet_names)
     st.write("**Dimensiones del Stock Disponible:**", df_stock.shape)
@@ -91,14 +103,6 @@ if archivo:
                         if (mes, codigo) in df_stock.index:
                             df_stock.loc[(mes, codigo), "Stock Disponible"] += valor
                             df_stock.loc[(mes, codigo), "Stock Restante"] += valor
-            df_stock["Stock Restante"] = df_stock["Stock Disponible"]
-            meses = sorted(df_stock.index.get_level_values(0).unique())
-            for mes in meses:
-                if mes > min(meses):
-                    stock_ant = df_stock.loc[(mes-1, slice(None)), "Stock Restante"].groupby(level=1).sum()
-                    for codigo, valor in stock_ant.items():
-                        if (mes, codigo) in df_stock.index:
-                            df_stock.loc[(mes, codigo), ["Stock Disponible", "Stock Restante"]] += valor
 
             
 
@@ -146,20 +150,8 @@ if archivo:
 
             df_resultado_optimo = pd.DataFrame(filas)
 
-            stock_total = df_stock.groupby("Codigo")["Stock Disponible"].sum()
-            asignado_total = df_resultado_optimo.groupby("Codigo")["Asignado"].sum()
-            diferencias = stock_total.subtract(asignado_total, fill_value=0)
-            diferencias_restantes = diferencias[diferencias > 0].reset_index()
-
-            df_no_asignado = diferencias_restantes.rename(columns={"Stock Disponible": "Asignado"})
-            df_no_asignado["Cliente"] = "NO ASIGNADO"
-            df_no_asignado["Mes"] = mes_actual
-            df_no_asignado["Motivo"] = "Stock sin mínimos asignados"
-            columnas_orden = ["Codigo", "Cliente", "Mes", "Asignado", "Motivo"]
-            df_no_asignado = df_no_asignado[columnas_orden]
-
             df_resultado_optimo["Motivo"] = "Asignación óptima"
-            df_resultado_final = pd.concat([df_resultado_optimo, df_no_asignado], ignore_index=True)
+            df_resultado_final = df_resultado_optimo.copy()
 
             st.success("✅ Asignación finalizada y exportada correctamente")
             output = io.BytesIO()
