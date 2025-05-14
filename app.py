@@ -1,4 +1,4 @@
-# ✅ PIAT v1.3 - Versión con propuesta PUSH separada
+# ✅ PIAT v1.3 - Con prioridad respetada
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 st.set_page_config(page_title="PIAT - Asignación de Stock", layout="centered")
-st.title("📦 IST - Asignación de Stock por Cliente y Mes (v1.3)")
+st.title("📦 IST - Asignación de Stock por Cliente y Mes (v1.3 Prioridad Fix)")
 
 st.markdown("""
 ### ✅ ¿Qué hace este módulo?
@@ -26,7 +26,7 @@ Sube tu archivo Excel con las siguientes hojas:
 - `Prioridad Clientes`
 
 ---
-📥 ¿No tienes un archivo?  
+📅 ¿No tienes un archivo?  
 👉 [Descargar archivo de prueba](https://github.com/sebasalinas27/IST-Modulo-Asignacion/raw/main/Template_Pruebas_PIAT.xlsx)
 """)
 
@@ -63,6 +63,10 @@ if uploaded_file:
             df_asignacion = pd.DataFrame(0, index=df_minimos.index.droplevel(2).unique(), columns=clientes_ordenados + ["PUSH"])
             minimos_agregados = set()
 
+            df_minimos = df_minimos.reset_index()
+            df_minimos["Prioridad"] = df_minimos["Cliente"].map(prioridad_clientes)
+            df_minimos.set_index(["MES", "Codigo", "Cliente"], inplace=True)
+
             index_minimos = df_minimos.index
             index_asignacion = df_asignacion.index
 
@@ -76,7 +80,11 @@ if uploaded_file:
                 pendientes_mes = df_minimos[(df_minimos.index.get_level_values(0) <= mes)]
                 pendientes_mes = pendientes_mes[pendientes_mes["Pendiente"] > 0]
 
-                for (m_orig, codigo, cliente), fila in pendientes_mes.groupby(level=[0,1,2]):
+                pendientes_mes = pendientes_mes.reset_index()
+                pendientes_mes = pendientes_mes.sort_values(by=["Prioridad"])
+
+                for _, fila in pendientes_mes.iterrows():
+                    m_orig, codigo, cliente = fila["MES"], fila["Codigo"], fila["Cliente"]
                     if (mes, codigo) not in df_stock.index:
                         continue
 
@@ -121,67 +129,41 @@ if uploaded_file:
             output.seek(0)
 
             st.success("✅ Optimización completada.")
+
+            st.subheader("📊 Total asignado por cliente")
+            asignado_total = df_asignacion.sum().sort_values(ascending=False)
+            fig1, ax1 = plt.subplots(figsize=(10, 4))
+            sns.barplot(x=asignado_total.index, y=asignado_total.values, ax=ax1)
+            ax1.set_title("Total Asignado por Cliente")
+            ax1.set_ylabel("Unidades Asignadas")
+            ax1.set_xlabel("Cliente")
+            ax1.tick_params(axis='x', rotation=45)
+            st.pyplot(fig1)
+
+            st.subheader("📈 Evolución mensual por cliente")
+            df_plot = df_asignacion.reset_index().melt(id_vars=["MES", "Codigo"], var_name="Cliente", value_name="Asignado")
+            df_cliente_mes = df_plot.groupby(["MES", "Cliente"])["Asignado"].sum().reset_index()
+            fig2, ax2 = plt.subplots(figsize=(10, 5))
+            sns.lineplot(data=df_cliente_mes, x="MES", y="Asignado", hue="Cliente", marker="o", ax=ax2)
+            ax2.set_title("Evolución mensual de asignación")
+            ax2.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+            st.pyplot(fig2)
+
+            st.subheader("🛎 Stock asignado vs restante por mes")
+            df_stock_total = df_stock.reset_index().groupby("MES")[["Stock Disponible", "Stock Restante"]].sum()
+            df_stock_total["Stock Asignado"] = df_stock_total["Stock Disponible"] - df_stock_total["Stock Restante"]
+            df_melted = df_stock_total[["Stock Asignado", "Stock Restante"]].reset_index().melt(id_vars="MES", var_name="Tipo", value_name="Unidades")
+            fig3, ax3 = plt.subplots(figsize=(8, 4))
+            sns.barplot(data=df_melted, x="MES", y="Unidades", hue="Tipo", ax=ax3)
+            ax3.set_title("Distribución de stock por mes")
+            st.pyplot(fig3)
+
             st.download_button(
-                label="📥 Descargar archivo Excel",
+                label="📅 Descargar archivo Excel",
                 data=output.getvalue(),
-                file_name="asignacion_resultados_PIAT_v1_3.xlsx",
+                file_name="asignacion_resultados_PIAT_v1_3_prioridad_fix.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
-
-            st.subheader("📤 Generar hoja de propuesta PUSH (opcional)")
-
-            if st.button("Generar propuesta de reasignación PUSH"):
-                df_push = df_asignacion.reset_index().melt(id_vars=["MES", "Codigo"], var_name="Cliente", value_name="Asignado")
-                df_push = df_push[df_push["Cliente"] == "PUSH"]
-
-                df_asignado = df_asignacion.reset_index().melt(id_vars=["MES", "Codigo"], var_name="Cliente", value_name="Asignado")
-                df_asignado = df_asignado[df_asignado["Cliente"] != "PUSH"]
-
-                df_minimos_exp = df_minimos.reset_index()[["MES", "Codigo", "Cliente", "Minimo"]]
-                df_asignado = df_asignado.merge(df_minimos_exp, on=["MES", "Codigo", "Cliente"], how="left")
-                df_asignado = df_asignado[df_asignado["Asignado"] >= df_asignado["Minimo"]]
-
-                df_prioridad_reset = df_prioridad.reset_index().rename(columns={df_prioridad.columns[0]: "Cliente"})
-                df_asignado = df_asignado.merge(df_prioridad_reset, on="Cliente", how="left")
-
-                recomendaciones = []
-                for _, push_row in df_push.iterrows():
-                    codigo = push_row["Codigo"]
-                    mes = push_row["MES"]
-                    cantidad_push = push_row["Asignado"]
-                    candidatos = df_asignado[(df_asignado["Codigo"] == codigo) & (df_asignado["MES"] == mes)]
-
-                    for _, row in candidatos.iterrows():
-                        recomendaciones.append({
-                            "Codigo": codigo,
-                            "Mes": mes,
-                            "Cliente Propuesto": row["Cliente"],
-                            "Asignado Actual": row["Asignado"],
-                            "Minimo Requerido": row["Minimo"],
-                            "Diferencia Potencial": cantidad_push,
-                            "Prioridad": row["Prioridad"]
-                        })
-
-                df_recomendaciones = pd.DataFrame(recomendaciones)
-
-                if not df_recomendaciones.empty:
-                    df_recomendaciones = df_recomendaciones.sort_values(by=["Codigo", "Mes", "Prioridad"])
-                    output_push = io.BytesIO()
-                    with pd.ExcelWriter(output_push, engine="xlsxwriter") as writer:
-                        df_recomendaciones.to_excel(writer, sheet_name="Propuesta Reasignación PUSH", index=False)
-                    st.session_state["push_result"] = output_push.getvalue()
-                    st.session_state["push_ready"] = True
-                    st.success("✅ Propuesta PUSH generada correctamente")
-                else:
-                    st.session_state["push_ready"] = False
-                    st.info("No hay sugerencias posibles a partir de los datos cargados.")
-
-            if st.session_state.get("push_ready", False):
-                st.download_button(
-                    label="📥 Descargar propuesta PUSH",
-                    data=st.session_state["push_result"],
-                    file_name="propuesta_reasignacion_push.xlsx"
-                )
 
     except Exception as e:
         st.error(f"❌ Error al procesar el archivo: {e}")
