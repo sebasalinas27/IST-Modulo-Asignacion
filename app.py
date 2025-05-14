@@ -59,13 +59,7 @@ if archivo:
         mes_actual = datetime.now().strftime("%Y-%m")
 
         # --- 3. Filtrado, acumulación y preparación de datos ---
-        meses = sorted(df_stock.index.get_level_values(0).unique())
-        for mes in meses:
-            if mes > min(meses):
-                stock_ant = df_stock.loc[(mes-1, slice(None)), "Stock Restante"].groupby(level=1).sum()
-                for codigo, valor in stock_ant.items():
-                    if (mes, codigo) in df_stock.index:
-                        df_stock.loc[(mes, codigo), ["Stock Disponible", "Stock Restante"]] += valor
+        
         codigos_comunes = set(df_stock["Codigo"]).intersection(set(df_minimos["Codigo"]))
         df_stock = df_stock[df_stock["Codigo"].isin(codigos_comunes)]
         df_minimos = df_minimos[df_minimos["Codigo"].isin(codigos_comunes)]
@@ -96,18 +90,18 @@ if archivo:
                     stock_ant = df_stock.loc[(mes-1, slice(None)), "Stock Restante"].groupby(level=1).sum()
                     for codigo, valor in stock_ant.items():
                         if (mes, codigo) in df_stock.index:
+                            df_stock.loc[(mes, codigo), "Stock Disponible"] += valor
+                            df_stock.loc[(mes, codigo), "Stock Restante"] += valor
+            df_stock["Stock Restante"] = df_stock["Stock Disponible"]
+            meses = sorted(df_stock.index.get_level_values(0).unique())
+            for mes in meses:
+                if mes > min(meses):
+                    stock_ant = df_stock.loc[(mes-1, slice(None)), "Stock Restante"].groupby(level=1).sum()
+                    for codigo, valor in stock_ant.items():
+                        if (mes, codigo) in df_stock.index:
                             df_stock.loc[(mes, codigo), ["Stock Disponible", "Stock Restante"]] += valor
 
-            stock_disp = stock_codigo_df["Stock Disponible"].sum()
-
-            c.extend([prioridad_dict.get(cliente, 5) for cliente in clientes])
-            A_row = [1 if j // m == i else 0 for j in range(n * m)]
-            A_eq.append(A_row)
-            b_eq.append(stock_disp)
-
-            for j, cliente in enumerate(clientes):
-                minimo = fila_min[j]
-                bounds.append((minimo, None))
+            
 
         for i, codigo in enumerate(codigos):
             fila_min = df_minimos[df_minimos["Codigo"] == codigo][clientes].values.flatten()
