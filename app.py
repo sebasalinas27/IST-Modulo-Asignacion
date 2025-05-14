@@ -11,15 +11,24 @@ import seaborn as sns
 
 # --- 1. Configuración inicial ---
 st.set_page_config(page_title="PIAT - Asignación de Stock", layout="centered")
-st.title("📦 IST - Asignación de Stock por Cliente y Mes v1.4")
+st.title("📦 IST - Asignación de Stock por Cliente y Mes (v1.4)")
 
-st.markdown(
-    """
-    Sube tu archivo Excel con las siguientes hojas:
-    - `Stock Disponible`
-    - `Mínimos de Asignación`
-    - `Prioridad Clientes`
-    
+st.markdown("""
+### ✅ ¿Qué hace este módulo?
+
+- Asigna productos considerando **mínimos requeridos por cliente y mes**
+- Utiliza el **stock restante de meses anteriores**
+- Prioriza clientes por nivel definido (1 es mayor prioridad)
+- Aprovecha el stock no solicitado asignándolo a un cliente ficticio **PUSH**
+- Exporta un archivo Excel con todas las vistas necesarias
+""")
+
+st.markdown("""
+Sube tu archivo Excel con las siguientes hojas:
+- `Stock Disponible`
+- `Mínimos de Asignación`
+- `Prioridad Clientes`
+
     ---
     📅 ¿No tienes un archivo?  
     👉 [Descargar archivo de prueba](https://github.com/sebasalinas27/IST-Modulo-Asignacion/raw/main/Template_Pruebas_PIAT.xlsx)
