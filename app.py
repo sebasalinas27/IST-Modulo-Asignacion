@@ -26,6 +26,16 @@ st.markdown("""
 uploaded_file = st.file_uploader("Sube tu archivo Excel", type=["xlsx"])
 
 if uploaded_file:
+    st.subheader("📊 Resumen del archivo cargado")
+    df_stock_preview = pd.read_excel(uploaded_file, sheet_name="Stock Disponible")
+    df_prioridad_preview = pd.read_excel(uploaded_file, sheet_name="Prioridad Clientes")
+    df_minimos_preview = pd.read_excel(uploaded_file, sheet_name="Mínimos de Asignación")
+
+    st.write(f"- **Productos**: {df_stock_preview['Codigo'].nunique()}")
+    st.write(f"- **Clientes**: {df_prioridad_preview.shape[0]}")
+    st.write(f"- **Meses**: {df_stock_preview['MES'].nunique()}")
+    st.write(f"- **Celdas con mínimo asignado**: {(df_minimos_preview['Minimo'] > 0).sum()}")
+
     if st.button("🔁 Ejecutar Asignación"):
         try:
             df_stock = pd.read_excel(uploaded_file, sheet_name="Stock Disponible")
