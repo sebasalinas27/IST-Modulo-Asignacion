@@ -1,4 +1,4 @@
-# ✅ PIAT v1.3 - Con prioridad respetada
+# ✅ PIAT v1.3 - Con prioridad respetada y PUSH diferido por mes
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 st.set_page_config(page_title="PIAT - Asignación de Stock", layout="centered")
-st.title("📦 IST - Asignación de Stock por Cliente y Mes (v1.3 Prioridad Fix)")
+st.title("📦 IST - Asignación de Stock por Cliente y Mes (v1.3 Prioridad Fix + PUSH por mes)")
 
 st.markdown("""
 ### ✅ ¿Qué hace este módulo?
@@ -15,7 +15,7 @@ st.markdown("""
 - Asigna productos considerando **mínimos requeridos por cliente y mes**
 - Utiliza el **stock restante de meses anteriores**
 - Prioriza clientes por nivel definido (1 es mayor prioridad)
-- Aprovecha el stock no solicitado asignándolo a un cliente ficticio **PUSH**
+- Acumula stock no asignado y lo asigna a **PUSH** en el mes real en que sobró
 - Exporta un archivo Excel con todas las vistas necesarias
 """)
 
@@ -62,6 +62,7 @@ if uploaded_file:
             meses = sorted(df_stock.index.get_level_values(0).unique())
             df_asignacion = pd.DataFrame(0, index=df_minimos.index.droplevel(2).unique(), columns=clientes_ordenados + ["PUSH"])
             minimos_agregados = set()
+            stock_reservado_por_mes = {}
 
             df_minimos = df_minimos.reset_index()
             df_minimos["Prioridad"] = df_minimos["Cliente"].map(prioridad_clientes)
@@ -79,7 +80,6 @@ if uploaded_file:
 
                 pendientes_mes = df_minimos[(df_minimos.index.get_level_values(0) <= mes)]
                 pendientes_mes = pendientes_mes[pendientes_mes["Pendiente"] > 0]
-
                 pendientes_mes = pendientes_mes.reset_index()
                 pendientes_mes = pendientes_mes.sort_values(by=["Prioridad"])
 
@@ -105,14 +105,19 @@ if uploaded_file:
                         df_stock.at[(mes, codigo), "Stock Restante"] -= asignado
                         df_minimos.at[(m_orig, codigo, cliente), "Pendiente"] -= asignado
 
+                # Guardar sobrante mensual (no asignar a PUSH todavía)
                 sobrantes = df_stock.loc[mes]["Stock Restante"]
                 sobrantes = sobrantes[sobrantes > 0]
                 for codigo, restante in sobrantes.items():
-                    if (mes, codigo) not in index_asignacion:
-                        df_asignacion.loc[(mes, codigo), :] = 0
-                        index_asignacion = df_asignacion.index
-                    df_asignacion.at[(mes, codigo), "PUSH"] += restante
+                    stock_reservado_por_mes[(mes, codigo)] = restante
                     df_stock.at[(mes, codigo), "Stock Restante"] = 0
+
+            # Final: asignar PUSH por mes real según reservas
+            for (mes, codigo), restante in stock_reservado_por_mes.items():
+                if (mes, codigo) not in index_asignacion:
+                    df_asignacion.loc[(mes, codigo), :] = 0
+                    index_asignacion = df_asignacion.index
+                df_asignacion.at[(mes, codigo), "PUSH"] += restante
 
             df_minimos["Asignado"] = df_minimos.index.map(
                 lambda x: df_asignacion.at[(x[0], x[1]), x[2]] if (x[0], x[1]) in df_asignacion.index else 0
@@ -161,7 +166,7 @@ if uploaded_file:
             st.download_button(
                 label="📅 Descargar archivo Excel",
                 data=output.getvalue(),
-                file_name="asignacion_resultados_PIAT_v1_3_prioridad_fix.xlsx",
+                file_name="asignacion_resultados_PIAT_v1_3_push_por_mes.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
 
