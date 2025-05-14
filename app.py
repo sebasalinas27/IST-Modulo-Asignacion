@@ -61,7 +61,6 @@ if archivo:
         # --- 3. Filtrado, acumulación y preparación de datos ---
         
         codigos_comunes = set(df_stock["Codigo"]).intersection(set(df_minimos["Codigo"]))
-        df_stock = df_stock[df_stock["Codigo"].isin(codigos_comunes)]
         df_minimos = df_minimos[df_minimos["Codigo"].isin(codigos_comunes)]
 
         df_prioridad["Prioridad"] = pd.to_numeric(df_prioridad["Prioridad"], errors='coerce')
