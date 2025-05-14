@@ -1,4 +1,4 @@
-# 📦 IST - Módulo de Asignación (PIAT v1.3)
+# 📦 IST - Módulo de Asignación (PIAT v1.4)
 
 Este proyecto optimiza la asignación de stock por cliente y por mes, considerando prioridades, mínimos requeridos y aprovechando el stock total mediante programación lineal.
 
