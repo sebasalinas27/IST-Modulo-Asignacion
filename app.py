@@ -11,7 +11,7 @@ import seaborn as sns
 
 # --- 1. Configuración inicial ---
 st.set_page_config(page_title="PIAT - Asignación de Stock", layout="centered")
-st.title("📦 IST - Asignación de Stock por Cliente y Mes")
+st.title("📦 IST - Asignación de Stock por Cliente y Mes v1.4")
 
 st.markdown(
     """
