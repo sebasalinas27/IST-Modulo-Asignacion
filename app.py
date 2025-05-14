@@ -81,6 +81,52 @@ if uploaded_file:
         if "PUSH" in df_asignacion.columns:
             df_asignacion = df_asignacion.drop(columns=["PUSH"])
 
+        # 📥 Exportación de resultados y visualización
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+            df_asignacion.to_excel(writer, sheet_name="Asignación Flujo")
+            df_stock.reset_index().to_excel(writer, sheet_name="Stock Disponible", index=False)
+            df_prioridad.to_excel(writer, sheet_name="Prioridad Clientes")
+            df_minimos.reset_index().to_excel(writer, sheet_name="Mínimos de Asignación", index=False)
+        output.seek(0)
+
+        st.success("✅ Optimización completada.")
+
+        st.subheader("📊 Total asignado por cliente")
+        asignado_total = df_asignacion.sum().sort_values(ascending=False)
+        fig1, ax1 = plt.subplots(figsize=(10, 4))
+        sns.barplot(x=asignado_total.index, y=asignado_total.values, ax=ax1)
+        ax1.set_title("Total Asignado por Cliente")
+        ax1.set_ylabel("Unidades Asignadas")
+        ax1.set_xlabel("Cliente")
+        ax1.tick_params(axis='x', rotation=45)
+        st.pyplot(fig1)
+
+        st.subheader("📈 Evolución mensual por cliente")
+        df_plot = df_asignacion.reset_index().melt(id_vars=["MES", "Codigo"], var_name="Cliente", value_name="Asignado")
+        df_cliente_mes = df_plot.groupby(["MES", "Cliente"])["Asignado"].sum().reset_index()
+        fig2, ax2 = plt.subplots(figsize=(10, 5))
+        sns.lineplot(data=df_cliente_mes, x="MES", y="Asignado", hue="Cliente", marker="o", ax=ax2)
+        ax2.set_title("Evolución mensual de asignación")
+        ax2.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+        st.pyplot(fig2)
+
+        st.subheader("📦 Stock asignado vs restante por mes")
+        df_stock_total = df_stock.reset_index().groupby("MES")[["Stock Disponible", "Stock Restante"]].sum()
+        df_stock_total["Stock Asignado"] = df_stock_total["Stock Disponible"] - df_stock_total["Stock Restante"]
+        df_melted = df_stock_total[["Stock Asignado", "Stock Restante"]].reset_index().melt(id_vars="MES", var_name="Tipo", value_name="Unidades")
+        fig3, ax3 = plt.subplots(figsize=(8, 4))
+        sns.barplot(data=df_melted, x="MES", y="Unidades", hue="Tipo", ax=ax3)
+        ax3.set_title("Distribución de stock por mes")
+        st.pyplot(fig3)
+
+        st.download_button(
+            label="📥 Descargar archivo Excel",
+            data=output.getvalue(),
+            file_name="asignacion_resultados_PIAT_v1_5.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+
         # 🧪 Verificación visual por código desde Streamlit
         st.subheader("🔍 Ver asignación por código específico")
         codigo_input = st.text_input("Ingresa un código exacto para revisar su asignación", value="713574 01")
