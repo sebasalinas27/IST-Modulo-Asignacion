@@ -1,4 +1,4 @@
-# ✅ PIAT v1.3 - Con prioridad respetada y PUSH diferido por mes
+# ✅ PIAT v1.4 - Con prioridad respetada y PUSH diferido por mes
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 st.set_page_config(page_title="PIAT - Asignación de Stock", layout="centered")
-st.title("📦 IST - Asignación de Stock por Cliente y Mes (v1.3 Prioridad Fix + PUSH por mes)")
+st.title("📦 IST - Asignación de Stock por Cliente y Mes (v1.4 Prioridad Fix + PUSH por mes")")
 
 st.markdown("""
 ### ✅ ¿Qué hace este módulo?
