@@ -1,164 +1,186 @@
-# ✅ PIAT v1.3 - Versión simplificada sin resumen de clientes
+# --- PIAT v1.4: Asignación de Stock con códigos no asignados incluidos ---
+
 import streamlit as st
 import pandas as pd
 import numpy as np
 import io
+from datetime import datetime
+from scipy.optimize import linprog
 import matplotlib.pyplot as plt
 import seaborn as sns
 
+# --- 1. Configuración inicial ---
 st.set_page_config(page_title="PIAT - Asignación de Stock", layout="centered")
-st.title("📦 IST - Asignación de Stock por Cliente y Mes (v1.3)")
+st.title("📦 IST - Asignación de Stock por Cliente y Mes")
 
-st.markdown("""
-### ✅ ¿Qué hace este módulo?
+st.markdown(
+    """
+    Sube tu archivo Excel con las siguientes hojas:
+    - `Stock Disponible`
+    - `Mínimos de Asignación`
+    - `Prioridad Clientes`
+    
+    ---
+    📅 ¿No tienes un archivo?  
+    👉 [Descargar archivo de prueba](https://github.com/sebasalinas27/IST-Modulo-Asignacion/raw/main/Template_Pruebas_PIAT.xlsx)
+    """
+)
 
-- Asigna productos considerando **mínimos requeridos por cliente y mes**
-- Utiliza el **stock restante de meses anteriores**
-- Prioriza clientes por nivel definido (1 es mayor prioridad)
-- Aprovecha el stock no solicitado asignándolo a un cliente ficticio **PUSH**
-- Exporta un archivo Excel con todas las vistas necesarias
-""")
+# --- 2. Carga del archivo ---
+archivo = st.file_uploader("Sube tu archivo Excel", type=["xlsx"])
+if archivo:
+    xls = pd.ExcelFile(archivo)
+    df_stock = pd.read_excel(xls, sheet_name="Stock Disponible")
+    df_minimos = pd.read_excel(xls, sheet_name="Mínimos de Asignación")
+    df_prioridad = pd.read_excel(xls, sheet_name="Prioridad Clientes")
 
-st.markdown("""
-Sube tu archivo Excel con las siguientes hojas:
-- `Stock Disponible`
-- `Mínimos de Asignación`
-- `Prioridad Clientes`
+    mes_actual = datetime.now().strftime("%Y-%m")
 
----
-📥 ¿No tienes un archivo?  
-👉 [Descargar archivo de prueba](https://github.com/sebasalinas27/IST-Modulo-Asignacion/raw/main/Template_Pruebas_PIAT.xlsx)
-""")
+    # --- 3. Filtrado y preparación de datos ---
+    codigos_comunes = set(df_stock["Codigo"]).intersection(set(df_minimos["Codigo"]))
+    df_stock = df_stock[df_stock["Codigo"].isin(codigos_comunes)]
+    df_minimos = df_minimos[df_minimos["Codigo"].isin(codigos_comunes)]
 
-uploaded_file = st.file_uploader("Sube tu archivo Excel", type=["xlsx"])
+    df_prioridad["Prioridad"] = pd.to_numeric(df_prioridad["Prioridad"], errors='coerce')
+    df_prioridad = df_prioridad.dropna(subset=["Prioridad"])
 
-if uploaded_file:
-    try:
-        df_stock = pd.read_excel(uploaded_file, sheet_name="Stock Disponible")
-        df_prioridad = pd.read_excel(uploaded_file, sheet_name="Prioridad Clientes", index_col=0)
-        df_minimos = pd.read_excel(uploaded_file, sheet_name="Mínimos de Asignación", index_col=[0, 1, 2])
+    clientes = df_minimos.columns[1:]
+    codigos = sorted(df_minimos["Codigo"].unique())
 
-        df_minimos = df_minimos.groupby(level=[0, 1, 2]).sum().sort_index()
-        df_minimos["Pendiente"] = df_minimos["Minimo"]
+    # --- 4. Preparar el modelo de optimización ---
+    n = len(codigos)
+    m = len(clientes)
 
-        prioridad_clientes = pd.to_numeric(df_prioridad.iloc[:, 0], errors='coerce').fillna(5)
-        clientes_ordenados = prioridad_clientes.sort_values().index.tolist()
+    c = []  # Función objetivo (minimizar prioridad)
+    A_eq = []  # Restricción de stock por código
+    b_eq = []
+    bounds = []
 
-        st.subheader("📊 Resumen del archivo cargado")
-        st.write(f"- **Productos**: {df_stock['Codigo'].nunique()}")
-        st.write(f"- **Clientes**: {df_prioridad.shape[0]}")
-        st.write(f"- **Meses**: {df_stock['MES'].nunique()}")
-        st.write(f"- **Celdas con mínimo asignado**: {(df_minimos['Minimo'] > 0).sum()}")
+    prioridad_dict = df_prioridad.set_index("Cliente")["Prioridad"].to_dict()
 
-        if st.button("🔁 Ejecutar Asignación"):
-            df_stock = df_stock[df_stock["Stock Disponible"] > 0].copy()
-            df_stock = df_stock.set_index(["MES", "Codigo"]).sort_index()
-            df_stock["Stock Restante"] = df_stock["Stock Disponible"]
+    for i, codigo in enumerate(codigos):
+        fila_min = df_minimos[df_minimos["Codigo"] == codigo][clientes].values.flatten()
+        stock_disp = df_stock[df_stock["Codigo"] == codigo]["Stock Disponible"].values[0]
 
-            codigos_validos = set(df_stock.index.get_level_values(1)) & set(df_minimos.index.get_level_values(1))
-            df_stock = df_stock[df_stock.index.get_level_values(1).isin(codigos_validos)]
-            df_minimos = df_minimos[df_minimos.index.get_level_values(1).isin(codigos_validos)]
+        c.extend([prioridad_dict.get(cliente, 5) for cliente in clientes])
+        A_row = [1 if j // m == i else 0 for j in range(n * m)]
+        A_eq.append(A_row)
+        b_eq.append(stock_disp)
 
-            meses = sorted(df_stock.index.get_level_values(0).unique())
-            df_asignacion = pd.DataFrame(0, index=df_minimos.index.droplevel(2).unique(), columns=clientes_ordenados + ["PUSH"])
-            minimos_agregados = set()
+        for j, cliente in enumerate(clientes):
+            minimo = fila_min[j]
+            bounds.append((minimo, None))
 
-            index_minimos = df_minimos.index
-            index_asignacion = df_asignacion.index
+    # --- 5. Resolver el modelo ---
+    resultado = linprog(c=c, A_eq=A_eq, b_eq=b_eq, bounds=bounds, method="highs")
 
-            for mes in meses:
-                if mes > 1:
-                    stock_ant = df_stock.loc[(mes-1, slice(None)), "Stock Restante"].groupby(level=1).sum()
-                    for codigo, valor in stock_ant.items():
-                        if (mes, codigo) in df_stock.index:
-                            df_stock.loc[(mes, codigo), ["Stock Disponible", "Stock Restante"]] += valor
+    if resultado.success:
+        asignaciones = resultado.x.reshape((n, m))
+        filas = []
+        for i, codigo in enumerate(codigos):
+            for j, cliente in enumerate(clientes):
+                filas.append({
+                    "Codigo": codigo,
+                    "Cliente": cliente,
+                    "Mes": mes_actual,
+                    "Asignado": round(asignaciones[i, j], 2)
+                })
 
-                pendientes_mes = df_minimos[(df_minimos.index.get_level_values(0) <= mes)]
-                pendientes_mes = pendientes_mes[pendientes_mes["Pendiente"] > 0]
+        df_resultado_optimo = pd.DataFrame(filas)
 
-                for (m_orig, codigo, cliente), fila in pendientes_mes.groupby(level=[0,1,2]):
-                    if (mes, codigo) not in df_stock.index:
-                        continue
+        # --- 6.X - Agregar fila para códigos con stock no asignado ---
+        stock_total = df_stock.groupby("Codigo")["Stock Disponible"].sum()
+        asignado_total = df_resultado_optimo.groupby("Codigo")["Asignado"].sum()
+        diferencias = stock_total.subtract(asignado_total, fill_value=0)
+        diferencias_restantes = diferencias[diferencias > 0].reset_index()
 
-                    idx_actual = (mes, codigo, cliente)
-                    if idx_actual not in index_minimos and idx_actual not in minimos_agregados:
-                        df_minimos.loc[idx_actual, ["Minimo", "Pendiente"]] = 0
-                        minimos_agregados.add(idx_actual)
+        df_no_asignado = diferencias_restantes.rename(columns={"Stock Disponible": "Asignado"})
+        df_no_asignado["Cliente"] = "NO ASIGNADO"
+        df_no_asignado["Mes"] = mes_actual
+        df_no_asignado["Motivo"] = "Stock sin mínimos asignados"
+        columnas_orden = ["Codigo", "Cliente", "Mes", "Asignado", "Motivo"]
+        df_no_asignado = df_no_asignado[columnas_orden]
 
-                    stock_disp = df_stock.at[(mes, codigo), "Stock Restante"]
-                    pendiente = df_minimos.at[(m_orig, codigo, cliente), "Pendiente"]
+        df_resultado_optimo["Motivo"] = "Asignación óptima"
+        df_resultado_final = pd.concat([df_resultado_optimo, df_no_asignado], ignore_index=True)
 
-                    if pendiente > 0 and stock_disp > 0:
-                        asignado = min(pendiente, stock_disp)
-                        if (mes, codigo) not in index_asignacion:
-                            df_asignacion.loc[(mes, codigo), :] = 0
-                            index_asignacion = df_asignacion.index
-                        df_asignacion.at[(mes, codigo), cliente] += asignado
-                        df_stock.at[(mes, codigo), "Stock Restante"] -= asignado
-                        df_minimos.at[(m_orig, codigo, cliente), "Pendiente"] -= asignado
+        # --- 6.Y - Generar propuesta de asignación PUSH futura ---
+        df_push = df_resultado_final[df_resultado_final["Cliente"] == "PUSH"]
+        df_cumplidos = df_resultado_optimo.copy()
+        df_cumplidos = df_cumplidos.merge(df_minimos.melt(id_vars="Codigo", var_name="Cliente", value_name="Minimo"),
+                                          on=["Codigo", "Cliente"], how="left")
+        df_cumplidos = df_cumplidos[df_cumplidos["Asignado"] >= df_cumplidos["Minimo"]]
+        df_cumplidos = df_cumplidos.merge(df_prioridad, on="Cliente", how="left")
 
-                sobrantes = df_stock.loc[mes]["Stock Restante"]
-                sobrantes = sobrantes[sobrantes > 0]
-                for codigo, restante in sobrantes.items():
-                    if (mes, codigo) not in index_asignacion:
-                        df_asignacion.loc[(mes, codigo), :] = 0
-                        index_asignacion = df_asignacion.index
-                    df_asignacion.at[(mes, codigo), "PUSH"] += restante
-                    df_stock.at[(mes, codigo), "Stock Restante"] = 0
+        recomendaciones = []
+        for _, fila in df_push.iterrows():
+            codigo, mes, push_qty = fila["Codigo"], fila["Mes"], fila["Asignado"]
+            clientes_candidatos = df_cumplidos[(df_cumplidos["Codigo"] == codigo) & (df_cumplidos["Mes"] == mes)]
+            for _, row in clientes_candidatos.iterrows():
+                diferencia = push_qty
+                recomendaciones.append({
+                    "Codigo": codigo,
+                    "Mes": mes,
+                    "Cliente Propuesto": row["Cliente"],
+                    "Asignado Actual": row["Asignado"],
+                    "Minimo Requerido": row["Minimo"],
+                    "Diferencia Potencial": diferencia,
+                    "Prioridad": row["Prioridad"]
+                })
 
-            df_minimos["Asignado"] = df_minimos.index.map(
-                lambda x: df_asignacion.at[(x[0], x[1]), x[2]] if (x[0], x[1]) in df_asignacion.index else 0
-            )
-            df_minimos["Cumple"] = df_minimos["Asignado"] >= df_minimos["Minimo"]
-            df_minimos["Pendiente Final"] = df_minimos["Minimo"] - df_minimos["Asignado"]
+        df_recomendaciones = pd.DataFrame(recomendaciones)
+        df_recomendaciones = df_recomendaciones.sort_values(by=["Codigo", "Mes", "Prioridad"])
 
-            output = io.BytesIO()
-            with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
-                df_asignacion.to_excel(writer, sheet_name="Asignación Óptima")
-                df_stock.reset_index().to_excel(writer, sheet_name="Stock Disponible", index=False)
-                df_prioridad.to_excel(writer, sheet_name="Prioridad Clientes")
-                df_minimos.reset_index().to_excel(writer, sheet_name="Mínimos de Asignación", index=False)
-            output.seek(0)
+        # --- 7. Visualizaciones ---
+        st.subheader("📊 Total asignado por cliente")
+        asignado_total_cliente = df_resultado_final.groupby("Cliente")["Asignado"].sum().sort_values(ascending=False)
+        fig1, ax1 = plt.subplots(figsize=(10, 4))
+        sns.barplot(x=asignado_total_cliente.index, y=asignado_total_cliente.values, ax=ax1)
+        ax1.set_title("Total Asignado por Cliente")
+        ax1.set_ylabel("Unidades Asignadas")
+        ax1.set_xlabel("Cliente")
+        ax1.tick_params(axis='x', rotation=45)
+        st.pyplot(fig1)
 
-            st.success("✅ Optimización completada.")
+        st.subheader("📈 Evolución mensual por cliente")
+        df_evolucion = df_resultado_final.groupby(["Mes", "Cliente"])["Asignado"].sum().reset_index()
+        fig2, ax2 = plt.subplots(figsize=(10, 5))
+        sns.lineplot(data=df_evolucion, x="Mes", y="Asignado", hue="Cliente", marker="o", ax=ax2)
+        ax2.set_title("Evolución mensual de asignación")
+        ax2.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+        st.pyplot(fig2)
 
-            # 📊 Total asignado por cliente
-            st.subheader("📊 Total asignado por cliente")
-            asignado_total = df_asignacion.sum().sort_values(ascending=False)
-            fig1, ax1 = plt.subplots(figsize=(10, 4))
-            sns.barplot(x=asignado_total.index, y=asignado_total.values, ax=ax1)
-            ax1.set_title("Total Asignado por Cliente")
-            ax1.set_ylabel("Unidades Asignadas")
-            ax1.set_xlabel("Cliente")
-            ax1.tick_params(axis='x', rotation=45)
-            st.pyplot(fig1)
+        st.subheader("📦 Stock asignado vs restante por código")
+        df_stock_codigo = df_stock.set_index("Codigo")
+        df_stock_codigo["Asignado"] = asignado_total
+        df_stock_codigo["Restante"] = df_stock_codigo["Stock Disponible"] - df_stock_codigo["Asignado"].fillna(0)
+        df_stock_codigo = df_stock_codigo.reset_index()
+        df_melted = df_stock_codigo.melt(id_vars="Codigo", value_vars=["Asignado", "Restante"], var_name="Tipo", value_name="Unidades")
+        fig3, ax3 = plt.subplots(figsize=(12, 4))
+        sns.barplot(data=df_melted, x="Codigo", y="Unidades", hue="Tipo", ax=ax3)
+        ax3.set_title("Distribución de stock por código")
+        ax3.tick_params(axis='x', rotation=90)
+        st.pyplot(fig3)
 
-            # 📈 Evolución mensual por cliente
-            st.subheader("📈 Evolución mensual por cliente")
-            df_plot = df_asignacion.reset_index().melt(id_vars=["MES", "Codigo"], var_name="Cliente", value_name="Asignado")
-            df_cliente_mes = df_plot.groupby(["MES", "Cliente"])["Asignado"].sum().reset_index()
-            fig2, ax2 = plt.subplots(figsize=(10, 5))
-            sns.lineplot(data=df_cliente_mes, x="MES", y="Asignado", hue="Cliente", marker="o", ax=ax2)
-            ax2.set_title("Evolución mensual de asignación")
-            ax2.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-            st.pyplot(fig2)
+        # --- 8. Exportar resultados ---
+        st.success("Asignación finalizada y exportada correctamente")
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+            df_resultado_final.to_excel(writer, sheet_name="Asignación óptima", index=False)
 
-            # 📦 Stock asignado vs restante por mes
-            st.subheader("📦 Stock asignado vs restante por mes")
-            df_stock_total = df_stock.reset_index().groupby("MES")[["Stock Disponible", "Stock Restante"]].sum()
-            df_stock_total["Stock Asignado"] = df_stock_total["Stock Disponible"] - df_stock_total["Stock Restante"]
-            df_melted = df_stock_total[["Stock Asignado", "Stock Restante"]].reset_index().melt(id_vars="MES", var_name="Tipo", value_name="Unidades")
-            fig3, ax3 = plt.subplots(figsize=(8, 4))
-            sns.barplot(data=df_melted, x="MES", y="Unidades", hue="Tipo", ax=ax3)
-            ax3.set_title("Distribución de stock por mes")
-            st.pyplot(fig3)
+            # --- 9. Hoja adicional en formato ancho (pivot por cliente) ---
+            df_pivot = df_resultado_final.pivot_table(
+                index=["Mes", "Codigo"],
+                columns="Cliente",
+                values="Asignado",
+                fill_value=0
+            ).reset_index()
+            df_pivot.to_excel(writer, sheet_name="Asignación Pivot", index=False)
 
-            st.download_button(
-                label="📥 Descargar archivo Excel",
-                data=output.getvalue(),
-                file_name="asignacion_resultados_PIAT_v1_3.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
+            # --- 10. Hoja adicional de recomendaciones PUSH ---
+            df_recomendaciones.to_excel(writer, sheet_name="Propuesta Reasignación PUSH", index=False)
 
-    except Exception as e:
-        st.error(f"❌ Error al procesar el archivo: {e}")
+        st.download_button("📥 Descargar resultado", data=output.getvalue(), file_name="asignacion_resultados_PIAT_v1_4.xlsx")
+
+    else:
+        st.error("No se pudo encontrar una solución óptima al problema de asignación.")
