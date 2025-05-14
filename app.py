@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 st.set_page_config(page_title="PIAT - Asignación de Stock", layout="centered")
-st.title("📦 IST - Asignación de Stock por Cliente y Mes (v1.4 Prioridad Fix + PUSH por mes")")
+st.title("📦 IST - Asignación de Stock por Cliente y Mes (v1.4 Prioridad Fix + PUSH por mes)")
 
 st.markdown("""
 ### ✅ ¿Qué hace este módulo?
