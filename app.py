@@ -67,7 +67,7 @@ if uploaded_file:
                         disponible = df_stock.at[(mes, codigo), "Stock Restante"]
                         stock_flujo[codigo] = stock_flujo.get(codigo, 0) + disponible
 
-                pendientes_mes = df_minimos[(df_minimos.index.get_level_values(0) == mes)]
+                pendientes_mes = df_minimos[(df_minimos.index.get_level_values(0) <= mes)]
                 pendientes_mes = pendientes_mes[pendientes_mes["Pendiente"] > 0].reset_index()
                 pendientes_mes["Prioridad"] = pendientes_mes["Cliente"].map(prioridad_clientes)
                 pendientes_mes = pendientes_mes.sort_values(by="Prioridad")
@@ -124,14 +124,7 @@ if uploaded_file:
             ax2.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
             st.pyplot(fig2)
 
-            st.subheader("📦 Stock asignado vs restante por mes")
-            df_stock_total = df_stock.reset_index().groupby("MES")[["Stock Disponible", "Stock Restante"]].sum()
-            df_stock_total["Stock Asignado"] = df_stock_total["Stock Disponible"] - df_stock_total["Stock Restante"]
-            df_melted = df_stock_total[["Stock Asignado", "Stock Restante"]].reset_index().melt(id_vars="MES", var_name="Tipo", value_name="Unidades")
-            fig3, ax3 = plt.subplots(figsize=(8, 4))
-            sns.barplot(data=df_melted, x="MES", y="Unidades", hue="Tipo", ax=ax3)
-            ax3.set_title("Distribución de stock por mes")
-            st.pyplot(fig3)
+            
 
             st.download_button(
                 label="📥 Descargar archivo Excel",
