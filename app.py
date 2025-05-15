@@ -1,4 +1,4 @@
-# ✅ PIAT v1.3 FINAL - Validado y listo para producción
+# ✅ PIAT v1.3 - Versión simplificada sin resumen de clientes
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -16,7 +16,6 @@ st.markdown("""
 - Utiliza el **stock restante de meses anteriores**
 - Prioriza clientes por nivel definido (1 es mayor prioridad)
 - Aprovecha el stock no solicitado asignándolo a un cliente ficticio **PUSH**
-- Calcula el **% de cumplimiento** por cliente y reporta pendientes
 - Exporta un archivo Excel con todas las vistas necesarias
 """)
 
@@ -93,7 +92,7 @@ if uploaded_file:
                         asignado = min(pendiente, stock_disp)
                         if (mes, codigo) not in index_asignacion:
                             df_asignacion.loc[(mes, codigo), :] = 0
-                            index_asignacion = df_asignacion.index  # update index
+                            index_asignacion = df_asignacion.index
                         df_asignacion.at[(mes, codigo), cliente] += asignado
                         df_stock.at[(mes, codigo), "Stock Restante"] -= asignado
                         df_minimos.at[(m_orig, codigo, cliente), "Pendiente"] -= asignado
@@ -113,46 +112,21 @@ if uploaded_file:
             df_minimos["Cumple"] = df_minimos["Asignado"] >= df_minimos["Minimo"]
             df_minimos["Pendiente Final"] = df_minimos["Minimo"] - df_minimos["Asignado"]
 
-            resumen = df_minimos[df_minimos["Minimo"] > 0].groupby("Cliente").agg(
-    Total_Minimo=("Minimo", "sum")
-).reset_index()
-
-asignado_real = df_asignacion.sum().reset_index()
-asignado_real.columns = ["Cliente", "Total_Asignado"]
-
-resumen = pd.merge(resumen, asignado_real, on="Cliente", how="outer")
-resumen["% Cumplido"] = (resumen["Total_Asignado"] / resumen["Total_Minimo"] * 100).round(2)
-resumen = resumen.fillna(0).sort_values("% Cumplido", ascending=False).sort_values("% Cumplido", ascending=False).sort_values("% Cumplido", ascending=False).agg(
-                Total_Minimo=("Minimo", "sum")
-            ).reset_index()
-
-            total_asignado = df_asignacion.sum().reset_index()
-            total_asignado.columns = ["Cliente", "Total_Asignado"]
-
-            resumen = pd.merge(resumen, total_asignado, on="Cliente", how="outer")
-            resumen["% Cumplido"] = (resumen["Total_Asignado"] / resumen["Total_Minimo"] * 100).round(2)
-            resumen = resumen.fillna(0).sort_values("% Cumplido", ascending=False).agg(
-                Total_Minimo=("Minimo", "sum"),
-                Total_Asignado=("Asignado", "sum")
-            )
-            resumen["% Cumplido"] = (resumen["Total_Asignado"] / resumen["Total_Minimo"] * 100).round(2)
-
             output = io.BytesIO()
             with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
                 df_asignacion.to_excel(writer, sheet_name="Asignación Óptima")
                 df_stock.reset_index().to_excel(writer, sheet_name="Stock Disponible", index=False)
                 df_prioridad.to_excel(writer, sheet_name="Prioridad Clientes")
                 df_minimos.reset_index().to_excel(writer, sheet_name="Mínimos de Asignación", index=False)
-                resumen.reset_index().to_excel(writer, sheet_name="Resumen Clientes", index=False)
             output.seek(0)
 
             st.success("✅ Optimización completada.")
 
             # 📊 Total asignado por cliente
             st.subheader("📊 Total asignado por cliente")
+            asignado_total = df_asignacion.sum().sort_values(ascending=False)
             fig1, ax1 = plt.subplots(figsize=(10, 4))
-            resumen_sorted = resumen.sort_values("Total_Asignado", ascending=False)
-            sns.barplot(x=resumen_sorted.index, y=resumen_sorted["Total_Asignado"], ax=ax1)
+            sns.barplot(x=asignado_total.index, y=asignado_total.values, ax=ax1)
             ax1.set_title("Total Asignado por Cliente")
             ax1.set_ylabel("Unidades Asignadas")
             ax1.set_xlabel("Cliente")
@@ -179,15 +153,12 @@ resumen = resumen.fillna(0).sort_values("% Cumplido", ascending=False).sort_valu
             ax3.set_title("Distribución de stock por mes")
             st.pyplot(fig3)
 
-            
             st.download_button(
-            label="📥 Descargar archivo Excel",
-            data=output.getvalue(),
-            file_name="asignacion_resultados_PIAT_v1_3.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
-
-        
+                label="📥 Descargar archivo Excel",
+                data=output.getvalue(),
+                file_name="asignacion_resultados_PIAT_v1_3.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
 
     except Exception as e:
         st.error(f"❌ Error al procesar el archivo: {e}")
