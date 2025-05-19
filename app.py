@@ -146,4 +146,16 @@ if uploaded_file:
             df_stock_total["Stock Asignado"] = df_stock_total["Stock Disponible"] - df_stock_total["Stock Restante"]
             df_melted = df_stock_total[["Stock Asignado", "Stock Restante"]].reset_index().melt(id_vars="MES", var_name="Tipo", value_name="Unidades")
             fig3, ax3 = plt.subplots(figsize=(8, 4))
-            sns.barplot(data=df_melted, x="MES", y="
+            
+sns.barplot(data=df_melted, x="MES", y="Unidades", hue="Tipo", ax=ax3)
+ax3.set_title("Distribución de stock por mes")
+ax3.set_ylabel("Unidades")
+ax3.set_xlabel("Mes")
+st.pyplot(fig3)
+
+st.download_button(
+    label="📥 Descargar archivo Excel",
+    data=output.getvalue(),
+    file_name="asignacion_resultados_PIAT_v1_5.xlsx",
+    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+)
