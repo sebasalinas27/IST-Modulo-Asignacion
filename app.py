@@ -1,4 +1,4 @@
-# ✅ PIAT v1.5 - Asignación con Prioridad y Flujo Continuo
+# ✅ PIAT v1.6 - Asignación con Prioridad y Flujo Continuo + Stock No Asignado
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -8,7 +8,7 @@ import seaborn as sns
 
 # 1. CONFIGURACIÓN DE LA APP
 st.set_page_config(page_title="PIAT - Asignación de Stock", layout="centered")
-st.title("📦 IST - Asignación de Stock por Cliente y Mes (v1.5 Final)")
+st.title("📦 IST - Asignación de Stock por Cliente y Mes (v1.6 Prioridad + Flujo + No Asignado)")
 
 st.markdown("""
 ### ✅ ¿Qué hace este módulo?
@@ -17,10 +17,10 @@ st.markdown("""
 - Utiliza el **stock restante como flujo acumulado entre meses**
 - Prioriza clientes por nivel definido (1 es mayor prioridad)
 - El stock sobrante **se arrastra como flujo**, no se manda a `PUSH`
-- Exporta un archivo Excel con todas las vistas necesarias
+- Exporta un archivo Excel con todas las vistas necesarias, incluyendo una nueva hoja con **stock no asignado**
 
 ---
-📅 ¿No tienes un archivo?  
+📥 ¿No tienes un archivo?  
 👉 [Descargar archivo de prueba](https://github.com/sebasalinas27/IST-Modulo-Asignacion/raw/main/Template_Pruebas_PIAT.xlsx)
 """)
 
@@ -98,12 +98,22 @@ if uploaded_file:
             if "PUSH" in df_asignacion.columns:
                 df_asignacion = df_asignacion.drop(columns=["PUSH"])
 
+            # 7.1 NUEVA HOJA: STOCK NO ASIGNADO
+            codigos_con_minimo = df_minimos.index.get_level_values(1).unique()
+            df_stock_no_asignado = df_stock.reset_index().copy()
+            df_stock_no_asignado["Stock Asignado"] = df_stock_no_asignado["Stock Disponible"] - df_stock_no_asignado["Stock Restante"]
+            df_stock_no_asignado["Stock No Asignado"] = df_stock_no_asignado["Stock Restante"]
+            df_stock_no_asignado["Estado Mínimo"] = df_stock_no_asignado["Codigo"].apply(
+                lambda x: "Tiene mínimo" if x in codigos_con_minimo else "Sin mínimo"
+            )
+
             output = io.BytesIO()
             with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
                 df_asignacion.to_excel(writer, sheet_name="Asignación Flujo")
                 df_stock.reset_index().to_excel(writer, sheet_name="Stock Disponible", index=False)
                 df_prioridad.to_excel(writer, sheet_name="Prioridad Clientes")
                 df_minimos.reset_index().to_excel(writer, sheet_name="Mínimos de Asignación", index=False)
+                df_stock_no_asignado.to_excel(writer, sheet_name="Stock No Asignado", index=False)
             output.seek(0)
 
             st.success("✅ Optimización completada.")
@@ -139,11 +149,12 @@ if uploaded_file:
 
             # 9. DESCARGA DEL RESULTADO
             st.download_button(
-                label="📅 Descargar archivo Excel",
+                label="📥 Descargar archivo Excel",
                 data=output.getvalue(),
-                file_name="asignacion_resultados_PIAT_v1_5.xlsx",
+                file_name="asignacion_resultados_PIAT_v1_6.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
 
         except Exception as e:
             st.error(f"❌ Error al procesar el archivo: {e}")
+
