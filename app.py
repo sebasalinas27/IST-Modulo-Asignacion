@@ -7,7 +7,7 @@ import seaborn as sns
 import traceback
 
 st.set_page_config(page_title="PIAT - Asignación de Stock", layout="centered")
-st.title("📦 IST - Asignación de Stock por Cliente y Mes (v1.5 Prioridad Fix + Flujo continuo)")
+st.title("📦 IST - Asignación de Stock por Cliente y Mes (v1.5 Prioridad Fix + Flujo continuo + Stock no asignado)")
 
 st.markdown("""
 ### ✅ ¿Qué hace este módulo?
@@ -20,7 +20,10 @@ st.markdown("""
 
 ---
 📥 ¿No tienes un archivo?  
-👉 [Descargar archivo de prueba](https://github.com= st.file_uploader("Sube tu archivo Excel", type=["xlsx"])
+👉 [Descargar archivo de prueba](https://github.com/sebasalinas27/IST-Modulo-Asignacion/raw/main/Template_Pruebas_PIAT.xlsx)
+""")
+
+uploaded_file = st.file_uploader("Sube tu archivo Excel", type=["xlsx"])
 
 # --- Funciones ---
 
@@ -46,6 +49,7 @@ def preprocesar_datos(df_stock, df_prioridad, df_minimos):
     df_minimos = df_minimos[df_minimos.index.get_level_values(1).isin(codigos_validos)]
 
     return df_stock, df_prioridad, df_minimos, prioridad_clientes, clientes_ordenados
+
 def asignar_stock(df_stock, df_minimos, prioridad_clientes, clientes_ordenados):
     meses = sorted(df_stock.index.get_level_values(0).unique())
     df_asignacion = pd.DataFrame(0, index=df_minimos.index.droplevel(2).unique(), columns=clientes_ordenados)
@@ -92,6 +96,13 @@ def exportar_excel(df_asignacion, df_stock, df_prioridad, df_minimos):
         df_stock.reset_index().to_excel(writer, sheet_name="Stock Disponible", index=False)
         df_prioridad.to_excel(writer, sheet_name="Prioridad Clientes")
         df_minimos.reset_index().to_excel(writer, sheet_name="Mínimos de Asignación", index=False)
+        # Agregar hojas adicionales para el análisis de stock no asignado
+        df_sobrante = df_stock.reset_index()[["MES", "Codigo", "Stock Restante"]]
+        df_sobrante.to_excel(writer, sheet_name="Stock Sobrante", index=False)
+        df_sobrante_minimos = df_minimos[df_minimos["Pendiente Final"] > 0]
+        df_sobrante_minimos.to_excel(writer, sheet_name="Sobrante con Mínimos", index=True)
+        df_baja_rotacion = df_stock.groupby("Codigo")["Stock Restante"].sum().sort_values(ascending=False)
+        df_baja_rotacion.to_excel(writer, sheet_name="Baja Rotación")
     output.seek(0)
     return output
 
@@ -142,4 +153,44 @@ if uploaded_file:
             df_stock_total["Stock Asignado"] = df_stock_total["Stock Disponible"] - df_stock_total["Stock Restante"]
             df_melted = df_stock_total[["Stock Asignado", "Stock Restante"]].reset_index().melt(id_vars="MES", var_name="Tipo", value_name="Unidades")
             fig3, ax3 = plt.subplots(figsize=(8, 4))
-            sns.barplot(data=df_melted, x="MES", y="
+            sns.barplot(data=df_melted, x="MES", y="Unidades", hue="Tipo", ax=ax3)
+            ax3.set_title("Distribución de stock por mes")
+            st.pyplot(fig3)
+
+            st.download_button(
+                label="📥 Descargar archivo Excel",
+                data=output.getvalue(),
+                file_name="asignacion_resultados_PIAT_v1_5.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+
+            # --- Análisis de stock no asignado ---
+            st.subheader("🔍 Análisis de Stock No Asignado")
+
+            # Stock sobrante por mes y código
+            st.subheader("📊 Stock Sobrante por Mes y Código")
+            st.dataframe(df_sobrante)
+            fig4, ax4 = plt.subplots(figsize=(12, 6))
+            df_pivot = df_sobrante.pivot("MES", "Codigo", "Stock Restante")
+            sns.heatmap(df_pivot, annot=True, fmt=".0f", cmap="YlGnBu", ax=ax4)
+            ax4.set_title("Heatmap de Stock Sobrante por Mes y Código")
+            st.pyplot(fig4)
+
+            # Códigos con stock sobrante y mínimos no cumplidos
+            st.subheader("📊 Códigos con Stock Sobrante y Mínimos No Cumplidos")
+            st.dataframe(df_sobrante_minimos)
+
+            # Productos con baja rotación acumulada
+            st.subheader("📊 Productos con Baja Rotación Acumulada")
+            st.dataframe(df_baja_rotacion)
+            fig5, ax5 = plt.subplots(figsize=(12, 6))
+            sns.barplot(x=df_baja_rotacion.index[:10], y=df_baja_rotacion.values[:10], ax=ax5)
+            ax5.set_title("Top 10 Productos con Mayor Stock Acumulado No Asignado")
+            ax5.set_ylabel("Stock Restante")
+            ax5.set_xlabel("Código")
+            ax5.tick_params(axis='x', rotation=45)
+            st.pyplot(fig5)
+
+        except Exception as e:
+            st.error(f"❌ Error al procesar el archivo: {e}")
+            st.text(traceback.format_exc())
