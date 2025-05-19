@@ -20,7 +20,10 @@ st.markdown("""
 
 ---
 📥 ¿No tienes un archivo?  
-👉 [Descargar archivo de prueba](https://github.com= st.file_uploader("Sube tu archivo Excel", type=["xlsx"])
+👉 Descargar archivo de prueba
+""")
+
+uploaded_file = st.file_uploader("Sube tu archivo Excel", type=["xlsx"])
 
 # --- Funciones ---
 
@@ -46,6 +49,7 @@ def preprocesar_datos(df_stock, df_prioridad, df_minimos):
     df_minimos = df_minimos[df_minimos.index.get_level_values(1).isin(codigos_validos)]
 
     return df_stock, df_prioridad, df_minimos, prioridad_clientes, clientes_ordenados
+
 def asignar_stock(df_stock, df_minimos, prioridad_clientes, clientes_ordenados):
     meses = sorted(df_stock.index.get_level_values(0).unique())
     df_asignacion = pd.DataFrame(0, index=df_minimos.index.droplevel(2).unique(), columns=clientes_ordenados)
