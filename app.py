@@ -154,8 +154,8 @@ ax3.set_xlabel("Mes")
 st.pyplot(fig3)
 
 st.download_button(
-    label="📥 Descargar archivo Excel",
-    data=output.getvalue(),
-    file_name="asignacion_resultados_PIAT_v1_5.xlsx",
-    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    label="📥 Descargar archivo Excel",
+    data=output.getvalue(),
+    file_name="asignacion_resultados_PIAT_v1_5.xlsx",
+    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 )
