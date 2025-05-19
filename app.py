@@ -53,47 +53,48 @@ if uploaded_file:
             df_asignacion = pd.DataFrame(0, index=df_minimos.index.droplevel(2).unique(), columns=clientes_ordenados + ["PUSH"])
             minimos_agregados = set()
 
+            index_minimos = df_minimos.index
+            index_asignacion = df_asignacion.index
+
             for mes in meses:
                 if mes > 1:
                     stock_ant = df_stock.loc[(mes-1, slice(None)), "Stock Restante"].groupby(level=1).sum()
                     for codigo, valor in stock_ant.items():
                         if (mes, codigo) in df_stock.index:
-                            df_stock.loc[(mes, codigo), "Stock Disponible"] += valor
-                            df_stock.loc[(mes, codigo), "Stock Restante"] += valor
+                            df_stock.loc[(mes, codigo), ["Stock Disponible", "Stock Restante"]] += valor
 
-                for cliente in clientes_ordenados:
-                    pendientes = df_minimos[(df_minimos.index.get_level_values(0) <= mes) & 
-                                            (df_minimos.index.get_level_values(2) == cliente)]
-                    pendientes = pendientes[pendientes["Pendiente"] > 0]
+                pendientes_mes = df_minimos[(df_minimos.index.get_level_values(0) <= mes)]
+                pendientes_mes = pendientes_mes[pendientes_mes["Pendiente"] > 0]
 
-                    for idx, fila in pendientes.iterrows():
-                        m_orig, codigo, cli = idx
-                        if (mes, codigo) not in df_stock.index:
-                            continue
+                for (m_orig, codigo, cliente), fila in pendientes_mes.groupby(level=[0,1,2]):
+                    if (mes, codigo) not in df_stock.index:
+                        continue
 
-                        idx_actual = (mes, codigo, cliente)
-                        if idx_actual not in df_minimos.index and idx_actual not in minimos_agregados:
-                            df_minimos.loc[idx_actual] = {"Minimo": 0, "Pendiente": 0}
-                            minimos_agregados.add(idx_actual)
+                    idx_actual = (mes, codigo, cliente)
+                    if idx_actual not in index_minimos and idx_actual not in minimos_agregados:
+                        df_minimos.loc[idx_actual, ["Minimo", "Pendiente"]] = 0
+                        minimos_agregados.add(idx_actual)
 
-                        stock_disp = df_stock.loc[(mes, codigo), "Stock Restante"]
-                        pendiente = fila["Pendiente"]
+                    stock_disp = df_stock.at[(mes, codigo), "Stock Restante"]
+                    pendiente = df_minimos.at[(m_orig, codigo, cliente), "Pendiente"]
 
-                        if pendiente > 0 and stock_disp > 0:
-                            asignado = min(pendiente, stock_disp)
-                            if (mes, codigo) not in df_asignacion.index:
-                                df_asignacion.loc[(mes, codigo), :] = 0
-                            df_asignacion.at[(mes, codigo), cliente] += asignado
-                            df_stock.loc[(mes, codigo), "Stock Restante"] -= asignado
-                            df_minimos.loc[idx, "Pendiente"] -= asignado
-
-                for codigo, fila_stock in df_stock.loc[mes].iterrows():
-                    restante = fila_stock["Stock Restante"]
-                    if restante > 0:
-                        if (mes, codigo) not in df_asignacion.index:
+                    if pendiente > 0 and stock_disp > 0:
+                        asignado = min(pendiente, stock_disp)
+                        if (mes, codigo) not in index_asignacion:
                             df_asignacion.loc[(mes, codigo), :] = 0
-                        df_asignacion.at[(mes, codigo), "PUSH"] += restante
-                        df_stock.loc[(mes, codigo), "Stock Restante"] = 0
+                            index_asignacion = df_asignacion.index  # update index
+                        df_asignacion.at[(mes, codigo), cliente] += asignado
+                        df_stock.at[(mes, codigo), "Stock Restante"] -= asignado
+                        df_minimos.at[(m_orig, codigo, cliente), "Pendiente"] -= asignado
+
+                sobrantes = df_stock.loc[mes]["Stock Restante"]
+                sobrantes = sobrantes[sobrantes > 0]
+                for codigo, restante in sobrantes.items():
+                    if (mes, codigo) not in index_asignacion:
+                        df_asignacion.loc[(mes, codigo), :] = 0
+                        index_asignacion = df_asignacion.index
+                    df_asignacion.at[(mes, codigo), "PUSH"] += restante
+                    df_stock.at[(mes, codigo), "Stock Restante"] = 0
 
             df_minimos["Asignado"] = df_minimos.index.map(
                 lambda x: df_asignacion.at[(x[0], x[1]), x[2]] if (x[0], x[1]) in df_asignacion.index else 0
@@ -118,11 +119,55 @@ if uploaded_file:
 
             st.success("✅ Optimización completada.")
             st.download_button(
-                label="📥 Descargar archivo Excel",
-                data=output.getvalue(),
-                file_name="asignacion_resultados_PIAT_v1_3.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
+            label="📥 Descargar archivo Excel",
+            data=output.getvalue(),
+            file_name="asignacion_resultados_PIAT_v1_3.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+
+        # 📊 Visualizaciones gráficas
+        st.subheader("📊 Total asignado por cliente")
+        fig1, ax1 = plt.subplots(figsize=(10, 4))
+        resumen_sorted = resumen.sort_values("Total_Asignado", ascending=False)
+        sns.barplot(x=resumen_sorted.index, y=resumen_sorted["Total_Asignado"], ax=ax1)
+        ax1.set_title("Total Asignado por Cliente")
+        ax1.set_ylabel("Unidades Asignadas")
+        ax1.set_xlabel("Cliente")
+        ax1.tick_params(axis='x', rotation=45)
+        st.pyplot(fig1)
+
+        st.subheader("📈 Evolución mensual por cliente")
+        df_plot = df_asignacion.reset_index().melt(id_vars=["MES", "Codigo"], var_name="Cliente", value_name="Asignado")
+        df_cliente_mes = df_plot.groupby(["MES", "Cliente"])["Asignado"].sum().reset_index()
+        fig2, ax2 = plt.subplots(figsize=(10, 5))
+        sns.lineplot(data=df_cliente_mes, x="MES", y="Asignado", hue="Cliente", marker="o", ax=ax2)
+        ax2.set_title("Evolución mensual de asignación")
+        ax2.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+        st.pyplot(fig2)
+
+        st.subheader("📦 Stock asignado vs restante por mes")
+        df_stock_total = df_stock.reset_index().groupby("MES")[["Stock Disponible", "Stock Restante"]].sum()
+        df_stock_total["Stock Asignado"] = df_stock_total["Stock Disponible"] - df_stock_total["Stock Restante"]
+        df_melted = df_stock_total[["Stock Asignado", "Stock Restante"]].reset_index().melt(id_vars="MES", var_name="Tipo", value_name="Unidades")
+        fig3, ax3 = plt.subplots(figsize=(8, 4))
+        sns.barplot(data=df_melted, x="MES", y="Unidades", hue="Tipo", ax=ax3)
+        ax3.set_title("Distribución de stock por mes")
+        st.pyplot(fig3)
+
+            # 🔍 Filtros dinámicos interactivos
+st.subheader("🔎 Explorar asignación filtrada")
+clientes_disp = df_asignacion.columns.tolist()
+codigos_disp = df_asignacion.index.get_level_values("Codigo").unique().tolist()
+meses_disp = sorted(df_asignacion.index.get_level_values("MES").unique())
+
+cliente_sel = st.selectbox("Selecciona cliente", clientes_disp)
+mes_sel = st.selectbox("Selecciona mes", meses_disp)
+
+df_filtro = df_asignacion.loc[(mes_sel, slice(None)), cliente_sel].reset_index()
+df_filtro = df_filtro[df_filtro[cliente_sel] > 0].sort_values(by=cliente_sel, ascending=False)
+
+st.markdown(f"### Resultados para **{cliente_sel}** en mes **{mes_sel}**")
+st.dataframe(df_filtro.rename(columns={cliente_sel: "Unidades Asignadas"})))
 
     except Exception as e:
         st.error(f"❌ Error al procesar el archivo: {e}")
