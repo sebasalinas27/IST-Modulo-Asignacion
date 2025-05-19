@@ -87,6 +87,7 @@ if uploaded_file:
                         df_asignacion.at[(mes, codigo), cliente] += asignado
                         df_minimos.at[(m, codigo, cliente), "Pendiente"] -= asignado
                         stock_flujo[codigo] -= asignado
+                        df_stock.at[(mes, codigo), "Stock Restante"] = stock_flujo[codigo]
 
             # 7. POSTPROCESAMIENTO Y EXPORTACIÓN
             df_minimos["Asignado"] = df_minimos.index.map(
@@ -157,4 +158,3 @@ if uploaded_file:
 
         except Exception as e:
             st.error(f"❌ Error al procesar el archivo: {e}")
-
