@@ -1,4 +1,4 @@
-# ✅ PIAT v1.6 - Asignación con Prioridad y Flujo Continuo + Stock No Asignado
+# ✅ PIAT v1.3 - Versión simplificada sin resumen de clientes
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -6,53 +6,51 @@ import io
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-# 1. CONFIGURACIÓN DE LA APP
 st.set_page_config(page_title="PIAT - Asignación de Stock", layout="centered")
-st.title("📦 IST - Asignación de Stock por Cliente y Mes (v1.6 Prioridad + Flujo + No Asignado)")
+st.title("📦 IST - Asignación de Stock por Cliente y Mes (v1.3)")
 
 st.markdown("""
 ### ✅ ¿Qué hace este módulo?
 
 - Asigna productos considerando **mínimos requeridos por cliente y mes**
-- Utiliza el **stock restante como flujo acumulado entre meses**
+- Utiliza el **stock restante de meses anteriores**
 - Prioriza clientes por nivel definido (1 es mayor prioridad)
-- El stock sobrante **se arrastra como flujo**, no se manda a `PUSH`
-- Exporta un archivo Excel con todas las vistas necesarias, incluyendo una nueva hoja con **stock no asignado**
+- Aprovecha el stock no solicitado asignándolo a un cliente ficticio **PUSH**
+- Exporta un archivo Excel con todas las vistas necesarias
+""")
+
+st.markdown("""
+Sube tu archivo Excel con las siguientes hojas:
+- `Stock Disponible`
+- `Mínimos de Asignación`
+- `Prioridad Clientes`
 
 ---
 📥 ¿No tienes un archivo?  
 👉 [Descargar archivo de prueba](https://github.com/sebasalinas27/IST-Modulo-Asignacion/raw/main/Template_Pruebas_PIAT.xlsx)
 """)
 
-# 2. CARGA DEL ARCHIVO
 uploaded_file = st.file_uploader("Sube tu archivo Excel", type=["xlsx"])
 
 if uploaded_file:
-    # 3. VISTA PREVIA
-    st.subheader("📊 Resumen del archivo cargado")
-    df_stock_preview = pd.read_excel(uploaded_file, sheet_name="Stock Disponible")
-    df_prioridad_preview = pd.read_excel(uploaded_file, sheet_name="Prioridad Clientes")
-    df_minimos_preview = pd.read_excel(uploaded_file, sheet_name="Mínimos de Asignación")
+    try:
+        df_stock = pd.read_excel(uploaded_file, sheet_name="Stock Disponible")
+        df_prioridad = pd.read_excel(uploaded_file, sheet_name="Prioridad Clientes", index_col=0)
+        df_minimos = pd.read_excel(uploaded_file, sheet_name="Mínimos de Asignación", index_col=[0, 1, 2])
 
-    st.write(f"- **Productos**: {df_stock_preview['Codigo'].nunique()}")
-    st.write(f"- **Clientes**: {df_prioridad_preview.shape[0]}")
-    st.write(f"- **Meses**: {df_stock_preview['MES'].nunique()}")
-    st.write(f"- **Celdas con mínimo asignado**: {(df_minimos_preview['Minimo'] > 0).sum()}")
+        df_minimos = df_minimos.groupby(level=[0, 1, 2]).sum().sort_index()
+        df_minimos["Pendiente"] = df_minimos["Minimo"]
 
-    if st.button("🔁 Ejecutar Asignación"):
-        try:
-            # 4. CARGA DE DATOS COMPLETOS
-            df_stock = pd.read_excel(uploaded_file, sheet_name="Stock Disponible")
-            df_prioridad = pd.read_excel(uploaded_file, sheet_name="Prioridad Clientes", index_col=0)
-            df_minimos = pd.read_excel(uploaded_file, sheet_name="Mínimos de Asignación", index_col=[0, 1, 2])
+        prioridad_clientes = pd.to_numeric(df_prioridad.iloc[:, 0], errors='coerce').fillna(5)
+        clientes_ordenados = prioridad_clientes.sort_values().index.tolist()
 
-            # 5. PREPARACIÓN DE DATOS
-            df_minimos = df_minimos.groupby(level=[0, 1, 2]).sum().sort_index()
-            df_minimos["Pendiente"] = df_minimos["Minimo"]
+        st.subheader("📊 Resumen del archivo cargado")
+        st.write(f"- **Productos**: {df_stock['Codigo'].nunique()}")
+        st.write(f"- **Clientes**: {df_prioridad.shape[0]}")
+        st.write(f"- **Meses**: {df_stock['MES'].nunique()}")
+        st.write(f"- **Celdas con mínimo asignado**: {(df_minimos['Minimo'] > 0).sum()}")
 
-            prioridad_clientes = pd.to_numeric(df_prioridad.iloc[:, 0], errors='coerce').fillna(5)
-            clientes_ordenados = prioridad_clientes.sort_values().index.tolist()
-
+        if st.button("🔁 Ejecutar Asignación"):
             df_stock = df_stock[df_stock["Stock Disponible"] > 0].copy()
             df_stock = df_stock.set_index(["MES", "Codigo"]).sort_index()
             df_stock["Stock Restante"] = df_stock["Stock Disponible"]
@@ -62,64 +60,69 @@ if uploaded_file:
             df_minimos = df_minimos[df_minimos.index.get_level_values(1).isin(codigos_validos)]
 
             meses = sorted(df_stock.index.get_level_values(0).unique())
-            df_asignacion = pd.DataFrame(0, index=df_minimos.index.droplevel(2).unique(), columns=clientes_ordenados)
+            df_asignacion = pd.DataFrame(0, index=df_minimos.index.droplevel(2).unique(), columns=clientes_ordenados + ["PUSH"])
+            minimos_agregados = set()
 
-            # 6. ASIGNACIÓN CON FLUJO
-            stock_flujo = {}
+            index_minimos = df_minimos.index
+            index_asignacion = df_asignacion.index
+
             for mes in meses:
-                for codigo in df_stock.index.get_level_values(1).unique():
-                    if (mes, codigo) in df_stock.index:
-                        stock_flujo[codigo] = stock_flujo.get(codigo, 0) + df_stock.at[(mes, codigo), "Stock Restante"]
+                if mes > 1:
+                    stock_ant = df_stock.loc[(mes-1, slice(None)), "Stock Restante"].groupby(level=1).sum()
+                    for codigo, valor in stock_ant.items():
+                        if (mes, codigo) in df_stock.index:
+                            df_stock.loc[(mes, codigo), ["Stock Disponible", "Stock Restante"]] += valor
 
-                pendientes_mes = df_minimos[df_minimos.index.get_level_values(0) == mes]
-                pendientes_mes = pendientes_mes[pendientes_mes["Pendiente"] > 0].reset_index()
-                pendientes_mes["Prioridad"] = pendientes_mes["Cliente"].map(prioridad_clientes)
-                pendientes_mes = pendientes_mes.sort_values(by="Prioridad")
+                pendientes_mes = df_minimos[(df_minimos.index.get_level_values(0) <= mes)]
+                pendientes_mes = pendientes_mes[pendientes_mes["Pendiente"] > 0]
 
-                for _, fila in pendientes_mes.iterrows():
-                    m, codigo, cliente = fila["MES"], fila["Codigo"], fila["Cliente"]
-                    pendiente = df_minimos.at[(m, codigo, cliente), "Pendiente"]
-                    disponible = stock_flujo.get(codigo, 0)
-                    if pendiente > 0 and disponible > 0:
-                        asignado = min(pendiente, disponible)
-                        if (mes, codigo) not in df_asignacion.index:
+                for (m_orig, codigo, cliente), fila in pendientes_mes.groupby(level=[0,1,2]):
+                    if (mes, codigo) not in df_stock.index:
+                        continue
+
+                    idx_actual = (mes, codigo, cliente)
+                    if idx_actual not in index_minimos and idx_actual not in minimos_agregados:
+                        df_minimos.loc[idx_actual, ["Minimo", "Pendiente"]] = 0
+                        minimos_agregados.add(idx_actual)
+
+                    stock_disp = df_stock.at[(mes, codigo), "Stock Restante"]
+                    pendiente = df_minimos.at[(m_orig, codigo, cliente), "Pendiente"]
+
+                    if pendiente > 0 and stock_disp > 0:
+                        asignado = min(pendiente, stock_disp)
+                        if (mes, codigo) not in index_asignacion:
                             df_asignacion.loc[(mes, codigo), :] = 0
+                            index_asignacion = df_asignacion.index
                         df_asignacion.at[(mes, codigo), cliente] += asignado
-                        df_minimos.at[(m, codigo, cliente), "Pendiente"] -= asignado
-                        stock_flujo[codigo] -= asignado
-                        df_stock.at[(mes, codigo), "Stock Restante"] = stock_flujo[codigo]
+                        df_stock.at[(mes, codigo), "Stock Restante"] -= asignado
+                        df_minimos.at[(m_orig, codigo, cliente), "Pendiente"] -= asignado
 
-            # 7. POSTPROCESAMIENTO Y EXPORTACIÓN
+                sobrantes = df_stock.loc[mes]["Stock Restante"]
+                sobrantes = sobrantes[sobrantes > 0]
+                for codigo, restante in sobrantes.items():
+                    if (mes, codigo) not in index_asignacion:
+                        df_asignacion.loc[(mes, codigo), :] = 0
+                        index_asignacion = df_asignacion.index
+                    df_asignacion.at[(mes, codigo), "PUSH"] += restante
+                    df_stock.at[(mes, codigo), "Stock Restante"] = 0
+
             df_minimos["Asignado"] = df_minimos.index.map(
                 lambda x: df_asignacion.at[(x[0], x[1]), x[2]] if (x[0], x[1]) in df_asignacion.index else 0
             )
             df_minimos["Cumple"] = df_minimos["Asignado"] >= df_minimos["Minimo"]
             df_minimos["Pendiente Final"] = df_minimos["Minimo"] - df_minimos["Asignado"]
 
-            if "PUSH" in df_asignacion.columns:
-                df_asignacion = df_asignacion.drop(columns=["PUSH"])
-
-            # 7.1 NUEVA HOJA: STOCK NO ASIGNADO
-            codigos_con_minimo = df_minimos.index.get_level_values(1).unique()
-            df_stock_no_asignado = df_stock.reset_index().copy()
-            df_stock_no_asignado["Stock Asignado"] = df_stock_no_asignado["Stock Disponible"] - df_stock_no_asignado["Stock Restante"]
-            df_stock_no_asignado["Stock No Asignado"] = df_stock_no_asignado["Stock Restante"]
-            df_stock_no_asignado["Estado Mínimo"] = df_stock_no_asignado["Codigo"].apply(
-                lambda x: "Tiene mínimo" if x in codigos_con_minimo else "Sin mínimo"
-            )
-
             output = io.BytesIO()
             with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
-                df_asignacion.to_excel(writer, sheet_name="Asignación Flujo")
+                df_asignacion.to_excel(writer, sheet_name="Asignación Óptima")
                 df_stock.reset_index().to_excel(writer, sheet_name="Stock Disponible", index=False)
                 df_prioridad.to_excel(writer, sheet_name="Prioridad Clientes")
                 df_minimos.reset_index().to_excel(writer, sheet_name="Mínimos de Asignación", index=False)
-                df_stock_no_asignado.to_excel(writer, sheet_name="Stock No Asignado", index=False)
             output.seek(0)
 
             st.success("✅ Optimización completada.")
 
-            # 8. VISUALIZACIONES
+            # 📊 Total asignado por cliente
             st.subheader("📊 Total asignado por cliente")
             asignado_total = df_asignacion.sum().sort_values(ascending=False)
             fig1, ax1 = plt.subplots(figsize=(10, 4))
@@ -130,6 +133,7 @@ if uploaded_file:
             ax1.tick_params(axis='x', rotation=45)
             st.pyplot(fig1)
 
+            # 📈 Evolución mensual por cliente
             st.subheader("📈 Evolución mensual por cliente")
             df_plot = df_asignacion.reset_index().melt(id_vars=["MES", "Codigo"], var_name="Cliente", value_name="Asignado")
             df_cliente_mes = df_plot.groupby(["MES", "Cliente"])["Asignado"].sum().reset_index()
@@ -139,6 +143,7 @@ if uploaded_file:
             ax2.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
             st.pyplot(fig2)
 
+            # 📦 Stock asignado vs restante por mes
             st.subheader("📦 Stock asignado vs restante por mes")
             df_stock_total = df_stock.reset_index().groupby("MES")[["Stock Disponible", "Stock Restante"]].sum()
             df_stock_total["Stock Asignado"] = df_stock_total["Stock Disponible"] - df_stock_total["Stock Restante"]
@@ -148,13 +153,12 @@ if uploaded_file:
             ax3.set_title("Distribución de stock por mes")
             st.pyplot(fig3)
 
-            # 9. DESCARGA DEL RESULTADO
             st.download_button(
                 label="📥 Descargar archivo Excel",
                 data=output.getvalue(),
-                file_name="asignacion_resultados_PIAT_v1_6.xlsx",
+                file_name="asignacion_resultados_PIAT_v1_3.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
 
-        except Exception as e:
-            st.error(f"❌ Error al procesar el archivo: {e}")
+    except Exception as e:
+        st.error(f"❌ Error al procesar el archivo: {e}")
