@@ -2,7 +2,7 @@
 # PIAT v1.3.3 - Mínimos en MES=1, stock mes a mes, prioridad estricta
 # Reglas:
 # - Los mínimos existen solo en MES=1 y generan "Pendiente".
-# - Cada mes, el stock que llega se asigna por código en fila de prioridad (1 -> 2 -> 3 ...).
+# - Cada mes, el stock que llega se asigna por código en fila de prioridad (1->2->3...).
 # - Si sobra stock del mes (y no hay pendientes), va a PUSH del mismo mes.
 # - NO se traslada stock entre meses.
 # =========================================================
@@ -68,8 +68,7 @@ if uploaded_file:
         clientes_por_prioridad = prioridad_series.sort_values().index.tolist()
 
         # -------------------------
-        # 3.3 Mínimos → solo MES=1
-        #     (si vienen otros meses por error, se consolidan en MES=1)
+        # 3.3 Mínimos → solo MES=1 (consolidar si vienen otros)
         # -------------------------
         df_min = df_min.reset_index()
         df_min.columns = ["MES", "Codigo", "Cliente", "Minimo"]
@@ -82,12 +81,12 @@ if uploaded_file:
 
         df_min = (
             df_min.groupby(["MES", "Codigo", "Cliente"], as_index=True)["Minimo"]
-            .sum()
-            .to_frame()
+                 .sum()
+                 .to_frame()
         )
 
         # -------------------------
-        # 3.4 Intersección de códigos
+        # 3.4 Intersección de códigos válidos
         # -------------------------
         cod_min = set(df_min.index.get_level_values(1))
         cod_stk = set(df_stock["Codigo"])
@@ -114,33 +113,37 @@ if uploaded_file:
             df_min_pos = df_min[df_min["Minimo"] > 0].copy()
             df_min_pos = df_min_pos[df_min_pos.index.get_level_values(1).isin(cod_validos)]
 
-            # *** FIX: usar .items() para obtener (índice, valor) correctamente ***
+            # FIX: usar .items() para extraer (índice, valor)
             pendientes = {}
             for (mes, cod, cli), minimo in df_min_pos["Minimo"].items():
                 pendientes[(cod, cli)] = int(minimo)
 
-            # 4.2 DataFrame de asignación por (MES, Codigo) x clientes + PUSH
+            # 4.2 Columnas de salida: clientes por prioridad presentes en los mínimos + PUSH
             meses = sorted(df_stock["MES"].unique())
-
-            # Columnas ordenadas por prioridad: primero los clientes con prioridad conocida, luego el resto, + PUSH
             clientes_en_min = sorted(
                 {cli for (_, _, cli) in df_min_pos.index},
                 key=lambda x: prioridad_series.get(x, 999)
             )
             columnas_asig = (
-                [c for c in clientes_por_prioridad if c in clientes_en_min]
-                + [c for c in clientes_en_min if c not in clientes_por_prioridad]
-                + ["PUSH"]
+                [c for c in clientes_por_prioridad if c in clientes_en_min] +
+                [c for c in clientes_en_min if c not in clientes_por_prioridad] +
+                ["PUSH"]
             )
 
-            df_asig = pd.DataFrame(columns=columnas_asig, dtype=float)  # se llenará con índice (MES, Codigo)
+            # 4.3 DataFrame de asignación con MultiIndex vacío (FIX del indexer)
+            idx_empty = pd.MultiIndex.from_arrays([[], []], names=["MES", "Codigo"])
+            df_asig = pd.DataFrame(columns=columnas_asig, index=idx_empty, dtype=float)
 
             # =========================
             # 5) Asignación mes a mes (prioridad estricta)
             # =========================
             for mes in meses:
                 # Stock disponible de este mes por código
-                stock_mes = df_stock[df_stock["MES"] == mes].groupby("Codigo")["Stock Disponible"].sum()
+                stock_mes = (
+                    df_stock[df_stock["MES"] == mes]
+                    .groupby("Codigo")["Stock Disponible"]
+                    .sum()
+                )
 
                 for codigo, stock_disp in stock_mes.items():
                     # Fila de salida inicial en 0 para este (MES, Codigo)
@@ -172,7 +175,6 @@ if uploaded_file:
                         queda_pend = any(pendientes.get((codigo, c), 0) > 0 for c in columnas_asig if c != "PUSH")
                         if not queda_pend:
                             fila["PUSH"] = float(stock_disp)
-                            stock_disp = 0
 
                     df_asig.loc[(mes, codigo)] = fila
 
@@ -181,13 +183,12 @@ if uploaded_file:
             # =========================
             # 6.1 Asignado total por (Codigo, Cliente) = sumar en todos los meses
             df_asig_idx = df_asig.copy()
-            df_asig_idx.index = pd.MultiIndex.from_tuples(df_asig.index, names=["MES", "Codigo"])
-
+            # (ya tiene MultiIndex con nombres)
             df_asig_long = df_asig_idx.drop(columns=["PUSH"]).stack().reset_index()
             df_asig_long.columns = ["MES", "Codigo", "Cliente", "Asignado"]
 
             # 6.2 Reconstruir df_minimos con métricas
-            df_min_m1 = df_min_pos.copy()  # solo MES=1 y cod_validos
+            df_min_m1 = df_min_pos.copy()  # solo MES=1 y códigos válidos
             df_min_m1["Asignado"] = df_min_m1.index.map(
                 lambda idx: int(
                     df_asig_long[(df_asig_long["Codigo"] == idx[1]) & (df_asig_long["Cliente"] == idx[2])]["Asignado"].sum()
@@ -212,10 +213,10 @@ if uploaded_file:
             output = io.BytesIO()
             with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
                 # Asignación por mes (incluye PUSH)
-                df_asig_out = df_asig_idx.reset_index().rename(columns={"level_0": "MES"})
+                df_asig_out = df_asig_idx.reset_index()
                 df_asig_out.to_excel(writer, sheet_name="Asignación Óptima", index=False)
 
-                # Insumos (tal cual)
+                # Insumos
                 df_stock.to_excel(writer, sheet_name="Stock Disponible", index=False)
                 df_prior.to_excel(writer, sheet_name="Prioridad Clientes")
 
