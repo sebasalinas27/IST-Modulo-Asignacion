@@ -113,7 +113,7 @@ if uploaded_file:
             df_min_pos = df_min[df_min["Minimo"] > 0].copy()
             df_min_pos = df_min_pos[df_min_pos.index.get_level_values(1).isin(cod_validos)]
 
-            # FIX: usar .items() para extraer (índice, valor)
+            # *** Importante: usar .items() para obtener (índice, valor) ***
             pendientes = {}
             for (mes, cod, cli), minimo in df_min_pos["Minimo"].items():
                 pendientes[(cod, cli)] = int(minimo)
@@ -152,7 +152,8 @@ if uploaded_file:
                     if codigo not in cod_validos:
                         # No tiene mínimos → todo a PUSH del mes
                         fila["PUSH"] = float(stock_disp)
-                        df_asig.loc[(mes, codigo)] = fila
+                        # Escribir SIEMPRE por columnas explícitas (evita crear columnas con el código)
+                        df_asig.loc[(mes, codigo), columnas_asig] = fila.values
                         continue
 
                     # Recorremos clientes en orden de prioridad
@@ -176,14 +177,17 @@ if uploaded_file:
                         if not queda_pend:
                             fila["PUSH"] = float(stock_disp)
 
-                    df_asig.loc[(mes, codigo)] = fila
+                    # Escribir por columnas explícitas (clave para no deformar df_asig)
+                    df_asig.loc[(mes, codigo), columnas_asig] = fila.values
+
+            # Blindaje final: mismas columnas y sin NaN
+            df_asig = df_asig.reindex(columns=columnas_asig).fillna(0)
 
             # =========================
             # 6) Métricas y salidas
             # =========================
             # 6.1 Asignado total por (Codigo, Cliente) = sumar en todos los meses
-            df_asig_idx = df_asig.copy()
-            # (ya tiene MultiIndex con nombres)
+            df_asig_idx = df_asig.copy()  # ya tiene MultiIndex ["MES","Codigo"]
             df_asig_long = df_asig_idx.drop(columns=["PUSH"]).stack().reset_index()
             df_asig_long.columns = ["MES", "Codigo", "Cliente", "Asignado"]
 
