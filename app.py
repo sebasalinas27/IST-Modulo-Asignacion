@@ -1,31 +1,26 @@
 # =========================================================
-# PIAS v1.4.1-perf — Políticas de mínimos seleccionables:
-#   1) "Solo en un mes" (estricto por mes, sin arrastre, PUSH del mes)
-#   2) "Continuo" (activable desde su mes, con arrastre, PUSH final)
+# PIAS v1.4.2‑fix — Políticas de mínimos seleccionables:
+# 1) "Solo en un mes" (estricto por mes, sin arrastre, PUSH del mes)
+# 2) "Continuo" (activable desde su mes, con arrastre, PUSH final)
 #
-# Cambios de performance:
-# - En modo "Continuo", se procesan solo códigos con stock del mes o carry.
-# - Se construye "Asignación Óptima" por lista de filas y se arma el DF al final.
-#
-# Salida (igual que antes; sin "Resumen Clientes"):
-# - Asignación Óptima
-# - Stock Disponible (insumo)
-# - Prioridad Clientes (insumo)
-# - Mínimos de Asignación (enriquecida por fila: Asignado, Cumple, Pendiente Final)
+# Mejora v1.4.2‑fix:
+# - Horizonte de meses = unión (meses en Stock ∪ meses en Mínimos > 0).
+#   Permite activar/consumir cuotas aun cuando un mes no trae filas de stock.
+# - Unión de códigos a procesar en continuo: set(carry) | set(stock_mes.index).
 # =========================================================
-
 import streamlit as st
 import pandas as pd
 import numpy as np
 import io
 import matplotlib.pyplot as plt
 import seaborn as sns
+from collections import defaultdict
 
 # =========================
 # 1) Cabecera de la App
 # =========================
 st.set_page_config(page_title="PIAT - Asignación de Stock", layout="centered")
-st.title("📦 IST/PIAS - Asignación de Stock (v1.4.1‑perf) - CH/MX/AR")
+st.title("📦 IST/PIAS - Asignación de Stock (v1.4.2‑fix) - CH/MX/AR")
 
 st.markdown("""
 **Políticas de mínimos**
@@ -64,7 +59,7 @@ if uploaded_file:
         # Usamos engines por defecto de pandas; al escribir, xlsxwriter.
         df_stock = pd.read_excel(uploaded_file, sheet_name="Stock Disponible")
         df_prior = pd.read_excel(uploaded_file, sheet_name="Prioridad Clientes", index_col=0)
-        df_min   = pd.read_excel(uploaded_file, sheet_name="Mínimos de Asignación", index_col=[0, 1, 2])
+        df_min = pd.read_excel(uploaded_file, sheet_name="Mínimos de Asignación", index_col=[0, 1, 2])
 
         # --- 3.2 Limpieza mínima ---
         df_stock.columns = [c.strip() for c in df_stock.columns]
@@ -92,18 +87,17 @@ if uploaded_file:
         df_min.columns = ["MES", "Codigo", "Cliente", "Minimo"]
         if "Minimo" not in df_min.columns:
             raise ValueError("La hoja 'Mínimos de Asignación' debe incluir la columna 'Minimo'.")
-
         df_min["MES"] = pd.to_numeric(df_min["MES"], errors="coerce").fillna(1).astype(int)
         df_min["Codigo"] = df_min["Codigo"].astype(str).str.strip()
         # Normalizamos Cliente a string
         df_min["Cliente"] = df_min["Cliente"].map(lambda x: str(norm_cliente(x)))
-        df_min["Minimo"]  = pd.to_numeric(df_min["Minimo"], errors="coerce").fillna(0).astype(int)
+        df_min["Minimo"] = pd.to_numeric(df_min["Minimo"], errors="coerce").fillna(0).astype(int)
 
         # Consolidar posibles duplicados exactos (MES, Codigo, Cliente)
         df_min = (
             df_min.groupby(["MES", "Codigo", "Cliente"], as_index=True)["Minimo"]
-                  .sum()
-                  .to_frame()
+            .sum()
+            .to_frame()
         )
 
         # --- 3.4 Intersección de códigos válidos ---
@@ -116,7 +110,6 @@ if uploaded_file:
         st.write(f"- **Productos en stock**: {df_stock['Codigo'].nunique():,}")
         st.write(f"- **Clientes con prioridad**: {df_prior.shape[0]:,}")
         st.write(f"- **Filas de mínimos (>0)**: {(df_min['Minimo'] > 0).sum():,}")
-
         st.info("Elige la política de mínimos y ejecuta la asignación.")
 
         # --- 3.6 Selector de política + ejecutar ---
@@ -141,9 +134,12 @@ if uploaded_file:
             df_min_pos = df_min[df_min["Minimo"] > 0].copy()
             df_min_pos = df_min_pos[df_min_pos.index.get_level_values(1).isin(cod_validos)]
 
-            # Meses a procesar
-            meses = sorted(df_stock["MES"].unique())
+            # FIX v1.4.2‑fix: Meses a procesar = unión de meses en Stock y en Mínimos (>0)
+            meses_stock = set(df_stock["MES"].unique())
+            meses_min = set(df_min_pos.reset_index()["MES"].unique()) if df_min_pos.shape[0] > 0 else set()
+            meses = sorted(meses_stock | meses_min)
             mes_final = max(meses) if len(meses) else 1
+
             # Clientes presentes en mínimos, ordenados por prioridad
             clientes_en_min = sorted(
                 {cli for (_, _, cli) in df_min_pos.index},
@@ -158,12 +154,11 @@ if uploaded_file:
             )
 
             # Estructuras de cuotas: cada fila del template es una obligación independiente
-            cuotas = { idx: _safe_int(q) for idx, q in df_min_pos["Minimo"].items() }
-            asignado_cuota = { idx: 0 for idx in cuotas.keys() }
+            cuotas = {idx: _safe_int(q) for idx, q in df_min_pos["Minimo"].items()}
+            asignado_cuota = {idx: 0 for idx in cuotas.keys()}
 
             # Pre-index de cuotas por (Codigo, Cliente) con listas ordenadas por MES objetivo (FIFO)
             # Valor: [(MES_obj, cantidad, idx_key), ...]
-            from collections import defaultdict
             cuotas_por_cod_cli = defaultdict(list)
             for (mes_obj, cod, cli), qty in cuotas.items():
                 cuotas_por_cod_cli[(cod, cli)].append((mes_obj, qty, (mes_obj, cod, cli)))
@@ -194,7 +189,6 @@ if uploaded_file:
 
                         # Vecindario de clientes y cuotas SOLO del MES exacto
                         asign_x_cliente = {c: 0 for c in columnas_asig}
-
                         for cliente in columnas_asig:
                             if cliente == "PUSH" or stock_disp <= 0:
                                 continue
@@ -232,7 +226,8 @@ if uploaded_file:
                     for codigo, inc in stock_mes.items():
                         carry_stock[codigo] = carry_stock.get(codigo, 0) + _safe_int(inc)
 
-                    # *** Optimización clave: procesar SOLO códigos con stock del mes o carry ***
+                    # *** Optimización: procesar SOLO códigos con stock del mes o carry ***
+                    # FIX v1.4.2‑fix: unión explícita con |
                     codigos_trabajo = set(carry_stock.keys()) | set(stock_mes.index)
 
                     for codigo in sorted(codigos_trabajo):
@@ -260,15 +255,18 @@ if uploaded_file:
                             for (mes_obj, qty, idx_key) in lst:
                                 if mes_obj > mes:
                                     break  # aún no activada
+
                                 pendiente = qty - asignado_cuota[idx_key]
                                 if pendiente <= 0:
                                     continue
                                 if carry_stock[codigo] <= 0:
                                     break
+
                                 asign = min(pendiente, carry_stock[codigo])
                                 asignado_cuota[idx_key] += asign
                                 carry_stock[codigo] -= asign
                                 asign_x_cliente[cliente] += asign
+
                                 if carry_stock[codigo] <= 0:
                                     break
 
@@ -276,7 +274,7 @@ if uploaded_file:
                         if any(asign_x_cliente[c] > 0 for c in columnas_asig if c != "PUSH") or (codigo in stock_mes.index):
                             filas_salida.append({"MES": mes, "Codigo": codigo, **asign_x_cliente})
 
-                    # Limpieza: opcional, podemos “apagar” entradas de carry en cero para evitar que inflen codigos_trabajo
+                    # Limpieza: opcional, “apagar” entradas de carry en cero para no inflar codigos_trabajo
                     # (no indispensable, pero ayuda a mantener chico el conjunto)
                     for codigo in list(carry_stock.keys()):
                         if carry_stock[codigo] <= 0 and codigo not in stock_mes.index:
@@ -343,11 +341,12 @@ if uploaded_file:
                 )
                 df_min_export.to_excel(writer, sheet_name="Mínimos de Asignación", index=False)
 
-            output.seek(0)
+                output.seek(0)
+
             st.success(f"✅ Asignación completada — Política: {modo}")
 
             # =========================
-            # 8) Gráficos (idénticos a v1.4.0, pero sobre df_asig_idx)
+            # 8) Gráficos
             # =========================
             st.subheader("📊 Total asignado por cliente")
             if "PUSH" in df_asig_idx.columns:
@@ -360,11 +359,11 @@ if uploaded_file:
             res_plot = df_asig_long.groupby("Cliente")["Asignado"].sum().sort_values(ascending=False)
             if len(res_plot) > 0:
                 sns.barplot(x=res_plot.index, y=res_plot.values, ax=ax1)
-            ax1.set_title("Total Asignado por Cliente")
-            ax1.set_ylabel("Unidades")
-            ax1.set_xlabel("Cliente")
-            ax1.tick_params(axis="x", rotation=45)
-            st.pyplot(fig1)
+                ax1.set_title("Total Asignado por Cliente")
+                ax1.set_ylabel("Unidades")
+                ax1.set_xlabel("Cliente")
+                ax1.tick_params(axis="x", rotation=45)
+                st.pyplot(fig1)
 
             st.subheader("📈 Asignación por mes (suma de clientes)")
             if "PUSH" in df_asig_idx.columns:
@@ -373,11 +372,12 @@ if uploaded_file:
             else:
                 df_mes = df_asig_idx.sum(axis=1).reset_index().groupby("MES")[0].sum().reset_index()
             df_mes.columns = ["MES", "Asignado"]
+
             fig2, ax2 = plt.subplots(figsize=(8, 4))
             if df_mes.shape[0] > 0:
                 sns.barplot(data=df_mes, x="MES", y="Asignado", ax=ax2)
-            ax2.set_title("Total Asignado por Mes")
-            st.pyplot(fig2)
+                ax2.set_title("Total Asignado por Mes")
+                st.pyplot(fig2)
 
             st.subheader("📦 PUSH por mes")
             if "PUSH" in df_asig_idx.columns:
@@ -385,11 +385,12 @@ if uploaded_file:
                 df_push.columns = ["MES", "PUSH"]
             else:
                 df_push = pd.DataFrame({"MES": [], "PUSH": []})
+
             fig3, ax3 = plt.subplots(figsize=(8, 4))
             if df_push.shape[0] > 0:
                 sns.barplot(data=df_push, x="MES", y="PUSH", ax=ax3)
-            ax3.set_title("PUSH por Mes")
-            st.pyplot(fig3)
+                ax3.set_title("PUSH por Mes")
+                st.pyplot(fig3)
 
             # =========================
             # 9) Descarga
@@ -397,7 +398,7 @@ if uploaded_file:
             st.download_button(
                 label="📥 Descargar archivo Excel",
                 data=output.getvalue(),
-                file_name="asignacion_resultados_PIAT_v1_4_1_perf.xlsx",
+                file_name="asignacion_resultados_PIAT_v1_4_2_fix.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
 
