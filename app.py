@@ -332,7 +332,7 @@ if uploaded_file:
             # 7) Excel de salida (mismas hojas)
             # =========================
             output = io.BytesIO()
-            with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+            with pd.ExcelWriter(output, engine="openpyxl") as writer:
                 df_asig_out = df_asig_idx.reset_index()
                 df_asig_out.to_excel(writer, sheet_name="Asignación Óptima", index=False)
                 df_stock.to_excel(writer, sheet_name="Stock Disponible", index=False)
